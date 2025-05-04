@@ -7,4 +7,5 @@ edition = "2024"
 anyhow = "1.0.98"
 chess = "3.2.0"
 failure = "0.1.8"
+rand = "0.9.1"
 vampirc-uci = { version = "0.11.1", features = ["chess"] }
