@@ -1,7 +1,8 @@
-use std::{error::Error, io::stdin};
+use std::{error::Error, io::stdin, str::FromStr};
 
+use chess::ChessMove;
 use engine::Engine;
-use vampirc_uci::{CommunicationDirection, UciMessage, parse_with_unknown};
+use uci_parser::{UciCommand, UciResponse};
 
 pub mod engine;
 
@@ -9,64 +10,55 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut engine = Engine::default();
 
     for line in stdin().lines() {
-        for m in parse_with_unknown(&line.unwrap())
-            .into_iter()
-            .filter(|m| m.direction() == CommunicationDirection::GuiToEngine)
-        {
-            match m {
-                UciMessage::Uci => {
-                    // Identify ourselves
-                    println!("{}", UciMessage::id_name("Patch"));
-                    println!("{}", UciMessage::id_author("sixfold"));
-                    // Shake the nice GUI's hand
-                    println!("{}", UciMessage::UciOk);
-                }
-                UciMessage::Debug(debug) => engine.set_debug(debug),
-                UciMessage::IsReady => {
-                    // Everything is blocking, so by the time we read this message, we're ready
-                    // TODO: make it so that it's not all blocking
-                    println!("{}", UciMessage::ReadyOk);
-                }
-                UciMessage::Position {
-                    startpos,
-                    fen,
-                    moves,
-                } => {
-                    if startpos {
-                        engine.set_starting_position(moves);
-                    } else {
-                        engine.set_position(fen.unwrap().as_str(), moves)?;
-                    }
-                }
-                UciMessage::SetOption { .. } => unimplemented!(),
-                UciMessage::UciNewGame | UciMessage::Stop => {
-                    // TODO: NOP for now
-                }
-                UciMessage::PonderHit => unimplemented!(),
-                UciMessage::Go {
-                    time_control: _time_control,
-                    search_control,
-                } => {
-                    if search_control.is_some() {
-                        unimplemented!()
-                    }
+        // TODO: remove clone
+        match line.as_ref().unwrap().clone().parse::<UciCommand>()? {
+            UciCommand::Uci => {
+                // Identify ourselves
+                println!("{}", UciResponse::Name("Patch"));
+                println!("{}", UciResponse::Author("sixfold"));
+                // Shake the nice GUI's hand
+                println!("{}", UciResponse::uciok());
+            }
+            UciCommand::Debug(debug) => engine.set_debug(debug),
+            UciCommand::IsReady => {
+                // Everything is blocking, so by the time we read this message, we're ready
+                // TODO: make it so that it's not all blocking
+                println!("{}", UciResponse::readyok());
+            }
+            UciCommand::SetOption { .. } => unimplemented!(),
+            UciCommand::Register { .. } => {
+                // We don't perform registration, so this is a NOP
+            }
+            UciCommand::UciNewGame => {
+                // NOP for now
+            }
+            UciCommand::Position { fen, moves } => {
+                let moves = moves
+                    .into_iter()
+                    .map(|s| ChessMove::from_str(&s).expect("Valid move"));
 
-                    // We're too stupid to do a real search, but the benefit is that we can respond right away :clueless:
-                    let mv = engine.best_move();
-                    println!("{}", UciMessage::best_move(mv));
-                }
-                UciMessage::Quit => return Ok(()),
-                UciMessage::Register { .. } => {
-                    // We don't perform registration, so this is a NOP
-                }
-                UciMessage::Unknown(str, _) => {
-                    println!("Unknown UCI message: {}", UciMessage::info_string(str))
-                }
-                _ => {
-                    // EngineToGui messages
-                    unreachable!()
+                if let Some(fen) = fen {
+                    engine.set_position(&fen, moves)?;
+                } else {
+                    engine.set_starting_position(moves);
                 }
             }
+            UciCommand::Go(_uci_search_options) => {
+                // We're too stupid to do a real search, but the benefit is that we can respond right away :clueless:
+                let mv = engine.best_move();
+                println!(
+                    "{}",
+                    UciResponse::BestMove {
+                        bestmove: Some(mv.to_string()),
+                        ponder: None,
+                    }
+                );
+            }
+            UciCommand::Stop => {
+                // NOP for now
+            }
+            UciCommand::PonderHit => unimplemented!(),
+            UciCommand::Quit => return Ok(()),
         }
     }
 

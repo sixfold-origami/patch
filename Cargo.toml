@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
-chess = "3.2.0"
+chess = { git = "https://github.com/jordanbray/chess", rev = "f6fae8bddcc941925e16e2770a6e95c1498e7e6f" }
 failure = "0.1.8"
 rand = "0.9.1"
-vampirc-uci = { version = "0.11.1", features = ["chess"] }
+uci-parser = "1.1.0"

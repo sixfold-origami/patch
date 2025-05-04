@@ -26,18 +26,22 @@ impl Engine {
     }
 
     /// Resets the board position to the starting position
-    pub fn set_starting_position(&mut self, moves: Vec<ChessMove>) {
+    pub fn set_starting_position(&mut self, moves: impl Iterator<Item = ChessMove>) {
         self.game = Game::new();
 
-        moves.into_iter().for_each(|mv| {
+        moves.for_each(|mv| {
             self.game.make_move(mv);
         });
     }
 
     /// Resets the board to the given position
-    pub fn set_position(&mut self, fen: &str, moves: Vec<ChessMove>) -> Result<(), anyhow::Error> {
-        self.game = Game::from_str(fen).map_err(|e| failure::Error::from(e).compat())?;
-        moves.into_iter().for_each(|mv| {
+    pub fn set_position(
+        &mut self,
+        fen: &str,
+        moves: impl Iterator<Item = ChessMove>,
+    ) -> Result<(), anyhow::Error> {
+        self.game = Game::from_str(fen).map_err(|e| anyhow::Error::msg(e))?;
+        moves.for_each(|mv| {
             self.game.make_move(mv);
         });
 
