@@ -10,8 +10,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut engine = Engine::default();
 
     for line in stdin().lines() {
-        // TODO: remove clone
-        match line.as_ref().unwrap().clone().parse::<UciCommand>()? {
+        match line.parse::<UciCommand>()? {
             UciCommand::Uci => {
                 // Identify ourselves
                 println!("{}", UciResponse::Name("Patch"));
