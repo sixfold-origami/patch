@@ -28,6 +28,23 @@ impl Score {
     pub fn mate(moves: i16) -> Self {
         Self::Mate(moves)
     }
+
+    /// Semantically inverts `self`, to evaluate this score from the opponents perspective
+    ///
+    /// In the case of mate scores, the mate counter is increased,
+    /// as this is more convenient in the minimax algorithm.
+    pub fn flip(self) -> Self {
+        match self {
+            Score::Centipawns(cp) => Score::Centipawns(-cp),
+            Score::Mate(m) => {
+                if m.is_positive() {
+                    Score::Mate((m.abs() + 1) * -1)
+                } else {
+                    Score::Mate(m.abs() + 1)
+                }
+            }
+        }
+    }
 }
 
 impl PartialOrd for Score {
