@@ -45,7 +45,7 @@ fn main() -> Result<(), anyhow::Error> {
         "Testing {} (experimental) against {} (master)",
         &experimental_rev, &maseter_rev
     );
-    let mut handle = Command::new("D:\\Programs\\Cute Chess\\cutechess-cli.exe")
+    let mut handle = Command::new("cutechess-cli.exe")
         .args([
             "-engine",
             "cmd=./target/experimental/release/fold-chess.exe",
