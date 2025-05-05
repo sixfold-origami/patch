@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             UciCommand::Go(_uci_search_options) => {
                 // We're too stupid to do a real search, but the benefit is that we can respond right away :clueless:
-                let mv = engine.best_move();
+                let mv = engine.search();
                 println!(
                     "{}",
                     UciResponse::BestMove {

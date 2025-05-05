@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use chess::{Board, BoardStatus, ChessMove, EMPTY, Game, MoveGen, Piece};
-use rand::Rng;
 
 const DEPTH_LIMIT: u8 = 4;
 
@@ -47,27 +46,6 @@ impl Engine {
         });
 
         Ok(())
-    }
-
-    pub fn best_move(&self) -> ChessMove {
-        let board = self.game.current_position();
-        let mut iter = MoveGen::new_legal(&board);
-
-        let targets = board.color_combined(!board.side_to_move());
-        iter.set_iterator_mask(*targets);
-
-        if let Some(mv) = iter.next() {
-            return mv;
-        }
-
-        iter.set_iterator_mask(!EMPTY);
-
-        let moves: Vec<_> = iter.collect();
-        if moves.is_empty() {
-            panic!("No legal moves");
-        }
-        let mut rng = rand::rng();
-        moves[rng.random_range(0..moves.len())]
     }
 
     pub fn search(&self) -> ChessMove {
