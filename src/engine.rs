@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use chess::{Board, BoardStatus, ChessMove, EMPTY, Game, MoveGen, Piece};
+use chess::{Board, BoardStatus, ChessMove, Game, MoveGen, Piece};
 use uci_parser::{UciInfo, UciResponse, UciScore};
 
 const DEPTH_LIMIT: u8 = 4;
@@ -86,29 +86,6 @@ impl Engine {
                 } else {
                     // Down the tree we go
                     let mut iter = MoveGen::new_legal(board);
-
-                    // Capture moves
-                    let targets = board.color_combined(!board.side_to_move());
-                    iter.set_iterator_mask(*targets);
-
-                    if let Some(max) = (&mut iter)
-                        .map(|mv| {
-                            let next = board.make_move_new(mv);
-                            (mv, -self.evaluate_board(&next, depth + 1).1) // Scored as opponent
-                        })
-                        .reduce(|(acc_mv, acc_sc), (mv, sc)| {
-                            if sc > acc_sc {
-                                (mv, sc)
-                            } else {
-                                (acc_mv, acc_sc)
-                            }
-                        })
-                    {
-                        return (Some(max.0), max.1);
-                    }
-
-                    // Non-capture moves
-                    iter.set_iterator_mask(!EMPTY);
 
                     if let Some(max) = (&mut iter)
                         .map(|mv| {
