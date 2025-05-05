@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use chess::{Board, BoardStatus, ChessMove, EMPTY, Game, MoveGen, Piece};
+use uci_parser::{UciInfo, UciResponse, UciScore};
 
 const DEPTH_LIMIT: u8 = 4;
 
@@ -65,6 +66,14 @@ impl Engine {
                 }
             })
         {
+            println!(
+                "{}",
+                UciResponse::info(
+                    UciInfo::new()
+                        .depth(4)
+                        .score(UciScore::cp((best_capture.1 * 100.) as i32))
+                )
+            );
             return best_capture.0;
         };
 
@@ -80,6 +89,14 @@ impl Engine {
                 }
             })
         {
+            println!(
+                "{}",
+                UciResponse::info(
+                    UciInfo::new()
+                        .depth(4)
+                        .score(UciScore::cp((best_move.1 * 100.) as i32))
+                )
+            );
             return best_move.0;
         };
 
