@@ -2,7 +2,7 @@
 members = ["./", "tools/self-play"]
 
 [package]
-name = "fold-chess"
+name = "patch"
 version = "0.1.0"
 edition = "2024"
 

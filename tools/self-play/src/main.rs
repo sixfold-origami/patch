@@ -48,10 +48,10 @@ fn main() -> Result<(), anyhow::Error> {
     let mut handle = Command::new("cutechess-cli.exe")
         .args([
             "-engine",
-            "cmd=./target/experimental/release/fold-chess.exe",
+            "cmd=./target/experimental/release/patch.exe",
             "name=patch-experimental",
             "-engine",
-            "cmd=./target/master/release/fold-chess.exe",
+            "cmd=./target/master/release/patch.exe",
             "name=patch-master",
             "-each",
             "proto=uci",
