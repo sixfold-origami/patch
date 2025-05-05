@@ -1,6 +1,8 @@
+use rayon::iter::ParallelIterator;
 use std::str::FromStr;
 
-use chess::{Board, BoardStatus, ChessMove, MoveGen, Piece};
+use chess::{Board, BoardStatus, ChessMove, MoveGen, Piece, Square};
+use rayon::iter::{IntoParallelIterator, ParallelBridge};
 use uci_parser::{UciInfo, UciResponse, UciScore};
 
 use crate::score::Score;
@@ -83,23 +85,31 @@ impl Engine {
                     // Down the tree we go
                     let mut iter = MoveGen::new_legal(board);
 
-                    if let Some(max) = (&mut iter)
+                    let (mv, score) = (&mut iter)
+                        .par_bridge()
+                        .into_par_iter()
                         .map(|mv| {
                             let next = board.make_move_new(mv);
                             (mv, self.evaluate_board(&next, depth + 1).1.flip()) // Scored as opponent
                         })
-                        .reduce(|(acc_mv, acc_sc), (mv, sc)| {
-                            if sc > acc_sc {
-                                (mv, sc)
-                            } else {
-                                (acc_mv, acc_sc)
-                            }
-                        })
-                    {
-                        return (Some(max.0), max.1);
-                    }
+                        .reduce(
+                            // Only the score is used for accumulation, so the move can be anything
+                            // M0 is the "lowest" score, so it will never be selected
+                            || (ChessMove::new(Square::A1, Square::A1, None), Score::mate(0)),
+                            |(acc_mv, acc_sc), (mv, sc)| {
+                                if sc > acc_sc {
+                                    (mv, sc)
+                                } else {
+                                    (acc_mv, acc_sc)
+                                }
+                            },
+                        );
 
-                    unreachable!("No legal moves! Handled above.");
+                    // This will always be some non-identity value,
+                    // as long as the above iterator has at least one valid move.
+                    // This is always the case, because the cases where no moves are available (mates)
+                    // are handled above
+                    return (Some(mv), score);
                 }
             }
         }
