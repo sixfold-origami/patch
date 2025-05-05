@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut engine = Engine::default();
 
     for line in stdin().lines() {
-        match line.parse::<UciCommand>()? {
+        match line.unwrap().parse::<UciCommand>()? {
             UciCommand::Uci => {
                 // Identify ourselves
                 println!("{}", UciResponse::Name("Patch"));
