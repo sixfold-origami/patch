@@ -65,6 +65,7 @@ fn main() -> Result<(), anyhow::Error> {
     }
 
     // Swap back to original branch
+    println!("Switching back to experimental branch");
     let mut handle = Command::new("git")
         .args(["switch", "-"])
         .spawn()
