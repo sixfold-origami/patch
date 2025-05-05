@@ -95,7 +95,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chess",
- "failure",
  "rand 0.9.1",
  "uci-parser",
 ]
