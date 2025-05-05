@@ -32,7 +32,7 @@ impl Engine {
     /// Sets the board to the given position
     ///
     /// If `fen` is `None`, then the default starting position is used
-    /// TODO: Try to reuse the existing game if possible
+    /// TODO: Try to reuse the existing board if possible?
     pub fn set_position(
         &mut self,
         fen: Option<&str>,
