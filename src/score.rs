@@ -15,7 +15,7 @@ pub enum Score {
     /// Positive is that we can mate in that many turns,
     /// negative is getting mated in that many turns.
     /// A value of zero means we are currently in checkmate.
-    Mate(i16),
+    Mate(i8),
 }
 
 impl Score {
@@ -25,7 +25,7 @@ impl Score {
     }
 
     /// Create [`Self`] with the provided mate score
-    pub fn mate(moves: i16) -> Self {
+    pub fn mate(moves: i8) -> Self {
         Self::Mate(moves)
     }
 
@@ -50,9 +50,8 @@ impl Score {
 impl PartialOrd for Score {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
-            // If both scores are the same type, then the internal values can be compared directly
+            // If both scores are in centipawns, then the internal values can be compared directly
             (Score::Centipawns(s1), Score::Centipawns(s2)) => Some(s1.cmp(s2)),
-            (Score::Mate(m1), Score::Mate(m2)) => Some(m1.cmp(m2)),
             // If they're different, then the ordering is always:
             // (we get mated) < (negative score) < (positive score) < (they get mated)
             (Score::Centipawns(_), Score::Mate(m)) => {
@@ -61,6 +60,8 @@ impl PartialOrd for Score {
                     // Any situation where we are not getting mated is a higher score
                     Some(Ordering::Greater)
                 } else {
+                    // They are getting mated.
+                    // Any situation in which we are not mating them is a lower score
                     Some(Ordering::Less)
                 }
             }
@@ -70,10 +71,31 @@ impl PartialOrd for Score {
                     // Any situation where we are not getting mated is a higher score
                     Some(Ordering::Less)
                 } else {
+                    // They are getting mated.
+                    // Any situation in which we are not mating them is a lower score
                     Some(Ordering::Greater)
                 }
             }
+            // If both scores are mates, then the order is:
+            // M0 < -M1 < -Mn < Mn < M1
+            (Score::Mate(m1), Score::Mate(m2)) => {
+                if m1.is_negative() && m2.is_negative() {
+                    Some(m2.cmp(m1)) // Reverse, since lower values are actually better
+                } else if m1.is_negative() && m2.is_positive() {
+                    Some(Ordering::Less)
+                } else if m1.is_positive() && m2.is_negative() {
+                    Some(Ordering::Greater)
+                } else {
+                    Some(m2.cmp(m1)) // Again, lower is better
+                }
+            }
         }
+    }
+}
+
+impl Ord for Score {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap()
     }
 }
 
