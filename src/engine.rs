@@ -1,15 +1,15 @@
 use std::str::FromStr;
 
-use chess::{Board, BoardStatus, ChessMove, Game, MoveGen, Piece};
+use chess::{Board, BoardStatus, ChessMove, MoveGen, Piece};
 use uci_parser::{UciInfo, UciResponse, UciScore};
 
 use crate::score::Score;
 
 const DEPTH_LIMIT: u8 = 4;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Engine {
-    game: Game,
+    board: Board,
     debug: bool,
 }
 
@@ -26,7 +26,7 @@ impl Engine {
 
     /// Resets the internal state for a new game
     pub fn reset_game(&mut self) {
-        self.game = Game::new();
+        self.board = Board::default();
     }
 
     /// Sets the board to the given position
@@ -38,22 +38,20 @@ impl Engine {
         fen: Option<&str>,
         moves: impl Iterator<Item = ChessMove>,
     ) -> Result<(), anyhow::Error> {
-        self.game = if let Some(fen) = fen {
-            Game::from_str(fen).map_err(|e| anyhow::Error::msg(e))?
-        } else {
-            Game::new()
+        if let Some(fen) = fen {
+            self.board = Board::from_str(fen).map_err(|e| anyhow::Error::msg(e))?
         };
 
         moves.for_each(|mv| {
-            self.game.make_move(mv);
+            let start = self.board.clone();
+            start.make_move(mv, &mut self.board);
         });
 
         Ok(())
     }
 
     pub fn search(&self) -> ChessMove {
-        let board = self.game.current_position();
-        let (mv, score) = self.evaluate_board(&board, 0);
+        let (mv, score) = self.evaluate_board(&self.board, 0);
 
         println!(
             "{}",
@@ -131,14 +129,5 @@ impl Engine {
         pawns -= ((board.pieces(Piece::Queen) & *theirs).0.count_ones() * 9) as i16;
 
         Score::cp(pawns * 100)
-    }
-}
-
-impl Default for Engine {
-    fn default() -> Self {
-        Self {
-            game: Game::new(),
-            debug: Default::default(),
-        }
     }
 }
