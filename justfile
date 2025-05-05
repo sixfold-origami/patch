@@ -36,15 +36,5 @@ alias br := build-release
 # Play a tournament against itself
 [group('testing')]
 self-play:
-    $tester_rev = git rev-parse --short HEAD
-    $Env:CARGO_TARGET_DIR='./target/tester'
-    just build-release
-
-    git checkout master
-    $master_rev = git rev-parse --short HEAD
-    $Env:CARGO_TARGET_DIR=$unset
-    just build-release
-    
-    echo $tester_rev $master_rev
-    . 'D:\Programs\Cute Chess\cutechess-cli.exe' --help
+    cargo run --release --package self-play
 alias sp := self-play

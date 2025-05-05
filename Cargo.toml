@@ -1,3 +1,6 @@
+[workspace]
+members = ["./", "tools/self-play"]
+
 [package]
 name = "fold-chess"
 version = "0.1.0"
