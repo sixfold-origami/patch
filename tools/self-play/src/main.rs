@@ -49,13 +49,20 @@ fn main() -> Result<(), anyhow::Error> {
         .args([
             "-engine",
             "cmd=./target/experimental/release/fold-chess.exe",
+            "name=patch-experimental",
             "-engine",
             "cmd=./target/master/release/fold-chess.exe",
+            "name=patch-master",
             "-each",
             "proto=uci",
             "tc=40/60",
             "-rounds",
-            "10",
+            "1000",
+            "-sprt",
+            "elo0=0",
+            "elo1=10",
+            "alpha=0.05",
+            "beta=0.05",
         ])
         .spawn()
         .expect("Failed to start cutechess command");
