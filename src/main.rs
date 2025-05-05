@@ -5,6 +5,7 @@ use engine::Engine;
 use uci_parser::{UciCommand, UciResponse};
 
 pub mod engine;
+pub mod score;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut engine = Engine::default();
