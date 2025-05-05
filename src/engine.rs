@@ -51,125 +51,111 @@ impl Engine {
 
     pub fn search(&self) -> ChessMove {
         let board = self.game.current_position();
-        let mut iter = MoveGen::new_legal(&board);
+        let (mv, score) = self.evaluate_board(&board, 0);
 
-        let targets = board.color_combined(!board.side_to_move());
-        iter.set_iterator_mask(*targets);
+        println!(
+            "{}",
+            UciResponse::info(
+                UciInfo::new()
+                    .depth(4)
+                    .score(UciScore::cp((score * 100.) as i32))
+            )
+        );
 
-        if let Some(best_capture) = (&mut iter)
-            .map(|mv| (mv, self.evaluate_board(&board, mv, 0)))
-            .reduce(|(original_mv, max), (new_mv, score)| {
-                if score > max {
-                    (new_mv, score)
-                } else {
-                    (original_mv, max)
-                }
-            })
-        {
-            println!(
-                "{}",
-                UciResponse::info(
-                    UciInfo::new()
-                        .depth(4)
-                        .score(UciScore::cp((best_capture.1 * 100.) as i32))
-                )
-            );
-            return best_capture.0;
-        };
-
-        iter.set_iterator_mask(!EMPTY);
-
-        if let Some(best_move) = (&mut iter)
-            .map(|mv| (mv, self.evaluate_board(&board, mv, 0)))
-            .reduce(|(original_mv, max), (new_mv, score)| {
-                if score > max {
-                    (new_mv, score)
-                } else {
-                    (original_mv, max)
-                }
-            })
-        {
-            println!(
-                "{}",
-                UciResponse::info(
-                    UciInfo::new()
-                        .depth(4)
-                        .score(UciScore::cp((best_move.1 * 100.) as i32))
-                )
-            );
-            return best_move.0;
-        };
-
-        unreachable!("No legal moves!");
+        mv.expect("Asked to search on a position with no legal moves")
     }
 
-    /// Evaluates making `move` on `board` as if we are making this move
-    fn evaluate_board(&self, board: &Board, mv: ChessMove, depth: u8) -> f32 {
-        let next = board.make_move_new(mv);
-
-        match next.status() {
+    /// Evaluates the provided board, assuming we are up to move
+    ///
+    /// Branches based on moves if possible.
+    /// Returns the score for this position, and the best move it found,
+    /// as long as we are not in a terminal case (recursion limit, stalemate, or checkmate).
+    fn evaluate_board(&self, board: &Board, depth: u8) -> (Option<ChessMove>, f32) {
+        match board.status() {
             BoardStatus::Checkmate => {
-                // We win
-                return 100.;
+                // We lost :(
+                (None, -100.)
             }
-            BoardStatus::Stalemate => return 0.,
+            BoardStatus::Stalemate => {
+                return (None, 0.);
+            }
             BoardStatus::Ongoing => {
                 if depth == DEPTH_LIMIT {
                     // Hueristic based on material
-
-                    // We just moved, so their pieces are the side to move
-                    let theirs = board.color_combined(board.side_to_move());
-                    let mine = board.color_combined(!board.side_to_move());
-
-                    // Get pieces and do sums
-                    let mut my_score = 0;
-                    let mut their_score = 0;
-
-                    my_score += (board.pieces(Piece::Pawn) & *mine).0.count_ones();
-                    their_score += (board.pieces(Piece::Pawn) & *theirs).0.count_ones();
-
-                    my_score += (board.pieces(Piece::Knight) & *mine).0.count_ones() * 3;
-                    their_score += (board.pieces(Piece::Knight) & *theirs).0.count_ones() * 3;
-
-                    my_score += (board.pieces(Piece::Bishop) & *mine).0.count_ones() * 3;
-                    their_score += (board.pieces(Piece::Bishop) & *theirs).0.count_ones() * 3;
-
-                    my_score += (board.pieces(Piece::Rook) & *mine).0.count_ones() * 5;
-                    their_score += (board.pieces(Piece::Rook) & *theirs).0.count_ones() * 5;
-
-                    my_score += (board.pieces(Piece::Queen) & *mine).0.count_ones() * 9;
-                    their_score += (board.pieces(Piece::Queen) & *theirs).0.count_ones() * 9;
-
-                    return (my_score - their_score) as f32;
+                    (None, self.material_hueristic(board))
                 } else {
                     // Down the tree we go
-                    let mut iter = MoveGen::new_legal(&board);
+                    let mut iter = MoveGen::new_legal(board);
 
-                    // Search non-capture moves first, because we're minimizing anyway
+                    // Capture moves
                     let targets = board.color_combined(!board.side_to_move());
-                    iter.set_iterator_mask(!*targets);
+                    iter.set_iterator_mask(*targets);
 
-                    if let Some(min) = (&mut iter)
-                        .map(|mv| self.evaluate_board(&board, mv, depth + 1))
-                        .reduce(|min, score| min.min(score))
+                    if let Some(max) = (&mut iter)
+                        .map(|mv| {
+                            let next = board.make_move_new(mv);
+                            (mv, -self.evaluate_board(&next, depth + 1).1) // Scored as opponent
+                        })
+                        .reduce(|(acc_mv, acc_sc), (mv, sc)| {
+                            if sc > acc_sc {
+                                (mv, sc)
+                            } else {
+                                (acc_mv, acc_sc)
+                            }
+                        })
                     {
-                        return min;
-                    };
+                        return (Some(max.0), max.1);
+                    }
 
-                    // Search everyting else (capture moves)
+                    // Non-capture moves
                     iter.set_iterator_mask(!EMPTY);
 
-                    if let Some(min) = (&mut iter)
-                        .map(|mv| self.evaluate_board(&board, mv, depth + 1))
-                        .reduce(|min, score| min.min(score))
+                    if let Some(max) = (&mut iter)
+                        .map(|mv| {
+                            let next = board.make_move_new(mv);
+                            (mv, -self.evaluate_board(&next, depth + 1).1) // Scored as opponent
+                        })
+                        .reduce(|(acc_mv, acc_sc), (mv, sc)| {
+                            if sc > acc_sc {
+                                (mv, sc)
+                            } else {
+                                (acc_mv, acc_sc)
+                            }
+                        })
                     {
-                        return min;
-                    };
+                        return (Some(max.0), max.1);
+                    }
 
                     unreachable!("No legal moves! Handled above.");
                 }
             }
         }
+    }
+
+    /// Scores the provided board based on material counts, assuming that we are up to move
+    fn material_hueristic(&self, board: &Board) -> f32 {
+        let mine = board.color_combined(board.side_to_move());
+        let theirs = board.color_combined(!board.side_to_move());
+
+        // Get pieces and do sums
+        let mut score: f32 = 0.;
+
+        score += ((board.pieces(Piece::Pawn) & *mine).0.count_ones()) as f32;
+        score -= ((board.pieces(Piece::Pawn) & *theirs).0.count_ones()) as f32;
+
+        score += ((board.pieces(Piece::Knight) & *mine).0.count_ones() * 3) as f32;
+        score -= ((board.pieces(Piece::Knight) & *theirs).0.count_ones() * 3) as f32;
+
+        score += ((board.pieces(Piece::Bishop) & *mine).0.count_ones() * 3) as f32;
+        score -= ((board.pieces(Piece::Bishop) & *theirs).0.count_ones() * 3) as f32;
+
+        score += ((board.pieces(Piece::Rook) & *mine).0.count_ones() * 5) as f32;
+        score -= ((board.pieces(Piece::Rook) & *theirs).0.count_ones() * 5) as f32;
+
+        score += ((board.pieces(Piece::Queen) & *mine).0.count_ones() * 9) as f32;
+        score -= ((board.pieces(Piece::Queen) & *theirs).0.count_ones() * 9) as f32;
+
+        return score;
     }
 }
 
