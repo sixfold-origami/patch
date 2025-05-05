@@ -38,14 +38,14 @@ impl Engine {
         fen: Option<&str>,
         moves: impl Iterator<Item = ChessMove>,
     ) -> Result<(), anyhow::Error> {
-        if let Some(fen) = fen {
-            self.board = Board::from_str(fen).map_err(|e| anyhow::Error::msg(e))?
+        let mut board = if let Some(fen) = fen {
+            Board::from_str(fen).map_err(|e| anyhow::Error::msg(e))?
+        } else {
+            Board::default()
         };
 
-        moves.for_each(|mv| {
-            let start = self.board.clone();
-            start.make_move(mv, &mut self.board);
-        });
+        moves.for_each(|mv| board = board.make_move_new(mv));
+        self.board = board;
 
         Ok(())
     }
