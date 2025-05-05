@@ -41,6 +41,7 @@ impl Engine {
         moves: impl Iterator<Item = ChessMove>,
     ) -> Result<(), anyhow::Error> {
         self.game = Game::from_str(fen).map_err(|e| anyhow::Error::msg(e))?;
+
         moves.for_each(|mv| {
             self.game.make_move(mv);
         });

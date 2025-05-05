@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 // We don't perform registration, so this is a NOP
             }
             UciCommand::UciNewGame => {
-                // NOP for now
+                engine.reset_game();
             }
             UciCommand::Position { fen, moves } => {
                 let moves = moves
