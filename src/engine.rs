@@ -25,22 +25,19 @@ impl Engine {
         self.game = Game::new();
     }
 
-    /// Resets the board position to the starting position
-    pub fn set_starting_position(&mut self, moves: impl Iterator<Item = ChessMove>) {
-        self.game = Game::new();
-
-        moves.for_each(|mv| {
-            self.game.make_move(mv);
-        });
-    }
-
-    /// Resets the board to the given position
+    /// Sets the board to the given position
+    ///
+    /// If `fen` is `None`, then the default starting position is used
     pub fn set_position(
         &mut self,
-        fen: &str,
+        fen: Option<&str>,
         moves: impl Iterator<Item = ChessMove>,
     ) -> Result<(), anyhow::Error> {
-        self.game = Game::from_str(fen).map_err(|e| anyhow::Error::msg(e))?;
+        self.game = if let Some(fen) = fen {
+            Game::from_str(fen).map_err(|e| anyhow::Error::msg(e))?
+        } else {
+            Game::new()
+        };
 
         moves.for_each(|mv| {
             self.game.make_move(mv);

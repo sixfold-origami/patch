@@ -37,11 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .into_iter()
                     .map(|s| ChessMove::from_str(&s).expect("Valid move"));
 
-                if let Some(fen) = fen {
-                    engine.set_position(&fen, moves)?;
-                } else {
-                    engine.set_starting_position(moves);
-                }
+                engine.set_position(fen.as_ref().map(|s| s.as_str()), moves)?;
             }
             UciCommand::Go(_uci_search_options) => {
                 // We're too stupid to do a real search, but the benefit is that we can respond right away :clueless:
