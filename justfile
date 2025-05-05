@@ -33,6 +33,12 @@ alias br := build-release
 
 ##################### Testing #####################
 
+# Check code
+[group('testing')]
+check:
+    cargo check
+alias c := check
+
 # Play a tournament against itself
 [group('testing')]
 self-play:
