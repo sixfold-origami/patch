@@ -10,7 +10,7 @@ fn main() -> Result<(), anyhow::Error> {
         .args(["build", "--release"])
         .env("CARGO_TARGET_DIR", "./target/experimental")
         .spawn()
-        .expect("Failed to build experimental binary");
+        .expect("Failed to start experimental build");
     let exit = handle.wait().expect("Build command is not running");
     if !exit.success() {
         bail!("Build failed: experimental");
@@ -21,7 +21,7 @@ fn main() -> Result<(), anyhow::Error> {
     let mut handle = Command::new("git")
         .args(["checkout", "master"])
         .spawn()
-        .expect("Failed to checkout master");
+        .expect("Failed to start git checkout");
     let exit = handle.wait().expect("git checkout command is not running");
     if !exit.success() {
         bail!("git checkout failed");
@@ -33,7 +33,7 @@ fn main() -> Result<(), anyhow::Error> {
     let mut handle = Command::new("cargo")
         .args(["build", "--release"])
         .spawn()
-        .expect("Failed to build master binary");
+        .expect("Failed to start master build");
     let exit = handle.wait().expect("Build command is not running");
     if !exit.success() {
         bail!("Build failed: master");
@@ -44,6 +44,17 @@ fn main() -> Result<(), anyhow::Error> {
         "Testing {} (experimental) against {} (master)",
         &experimental_rev, &maseter_rev
     );
+    // let mut handle = Command::new("D:\\Programs\\Cute Chess\\cutechess-cli.exe");
+
+    // Swap back to original branch
+    let mut handle = Command::new("git")
+        .args(["switch", "-"])
+        .spawn()
+        .expect("Failed to start git switch");
+    let exit = handle.wait().expect("git switch command is not running");
+    if !exit.success() {
+        bail!("git switch failed");
+    }
 
     Ok(())
 }
