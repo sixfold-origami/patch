@@ -68,7 +68,7 @@ fn main() -> anyhow::Result<()> {
             "name=patch-master",
             "-each",
             "proto=uci",
-            "tc=20/20",
+            "tc=40/60",
             "-rounds",
             "1000",
             "-sprt",
