@@ -1,51 +1,61 @@
-use std::process::Command;
+use std::process::{Child, Command};
 
-use anyhow::bail;
+use anyhow::{Context, bail};
 
-fn main() -> Result<(), anyhow::Error> {
+/// Name for the git stash to put any uncommited changes into
+const GIT_STASH_NAME: &str = "__internal__ self play stash";
+
+fn main() -> anyhow::Result<()> {
     // Build current rev
     println!("Building experimental");
     let experimental_rev = get_rev();
-    let mut handle = Command::new("cargo")
+    let child = Command::new("cargo")
         .args(["build", "--release"])
         .env("CARGO_TARGET_DIR", "./target/experimental")
-        .spawn()
-        .expect("Failed to start experimental build");
-    let exit = handle.wait().expect("Build command is not running");
-    if !exit.success() {
-        bail!("Build failed: experimental");
-    }
+        .spawn();
+    drive_spawned_child(child, "experimental build", true)?;
+
+    // Stash changes, if any
+    println!("Stashing uncommitted changes");
+    let child = Command::new("git")
+        .args(["stash", "create", GIT_STASH_NAME])
+        .spawn();
+    drive_spawned_child(child, "git stash", true)?;
 
     // Swap to master
     println!("Switching to master");
-    let mut handle = Command::new("git")
-        .args(["checkout", "master"])
-        .spawn()
-        .expect("Failed to start git checkout");
-    let exit = handle.wait().expect("git checkout command is not running");
-    if !exit.success() {
-        bail!("git checkout failed");
-    }
+    let child = Command::new("git").args(["checkout", "master"]).spawn();
+    drive_spawned_child(child, "checkout master", true)?;
 
     // Build master
     println!("Building master");
     let maseter_rev = get_rev();
-    let mut handle = Command::new("cargo")
+    let child = Command::new("cargo")
         .args(["build", "--release"])
         .env("CARGO_TARGET_DIR", "./target/master")
-        .spawn()
-        .expect("Failed to start master build");
-    let exit = handle.wait().expect("Build command is not running");
-    if !exit.success() {
-        bail!("Build failed: master");
-    }
+        .spawn();
+    drive_spawned_child(child, "master build", true)?;
+
+    // Reset git state
+    // Note: Since all the build artifacts end up in the gitignore'd target folder,
+    // once they are built, we can freely mess with git however we wish.
+    // We reset git before running the test for convenience, as tests can take a long time.
+    println!("Switching back to experimental branch");
+    let child = Command::new("git").args(["switch", "-"]).spawn();
+    drive_spawned_child(child, "git switch", true)?;
+
+    println!("Applying previously stashed changes");
+    let child = Command::new("git")
+        .args(["stash", "pop", GIT_STASH_NAME])
+        .spawn();
+    drive_spawned_child(child, "git stash pop", false)?; // Ignore exit code, as this can fail if there is no stash
 
     // Test
     println!(
         "Testing {} (experimental) against {} (master)",
         &experimental_rev, &maseter_rev
     );
-    let mut handle = Command::new("cutechess-cli.exe")
+    let child = Command::new("cutechess-cli.exe")
         .args([
             "-engine",
             "cmd=./target/experimental/release/patch.exe",
@@ -64,23 +74,8 @@ fn main() -> Result<(), anyhow::Error> {
             "alpha=0.05",
             "beta=0.05",
         ])
-        .spawn()
-        .expect("Failed to start cutechess command");
-    let exit = handle.wait().expect("cutechess command is not running");
-    if !exit.success() {
-        bail!("cutechess command failed");
-    }
-
-    // Swap back to original branch
-    println!("Switching back to experimental branch");
-    let mut handle = Command::new("git")
-        .args(["switch", "-"])
-        .spawn()
-        .expect("Failed to start git switch");
-    let exit = handle.wait().expect("git switch command is not running");
-    if !exit.success() {
-        bail!("git switch failed");
-    }
+        .spawn();
+    drive_spawned_child(child, "cutechess", true)?;
 
     Ok(())
 }
@@ -95,4 +90,27 @@ fn get_rev() -> String {
     let mut output = String::from_utf8(output).expect("Failed to parse command output from utf-8");
     output.pop();
     output
+}
+
+/// Waits for a spawned child process to finish, spitting out errors if anything goes wrong
+///
+/// Inputs:
+/// - `child`: The spawned child to drive
+/// - `command_name`: Semantic command name; only used for error messages
+/// - `require_success`: Return an error if the command returns a non-zero exit code
+fn drive_spawned_child(
+    child: std::io::Result<Child>,
+    command_name: &str,
+    require_success: bool,
+) -> anyhow::Result<()> {
+    let exit = child
+        .context(format!("Failed to start command: {}", command_name))?
+        .wait()
+        .context(format!("Command is not running: {}", command_name))?;
+
+    if !exit.success() && require_success {
+        bail!("Command failed: {}", command_name);
+    }
+
+    Ok(())
 }
