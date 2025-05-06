@@ -16,6 +16,7 @@ pub struct Engine {
 
     stop_time: Option<Instant>,
     current_search_depth: u8,
+    best_move_found: Option<ChessMove>,
 }
 
 impl Engine {
@@ -30,8 +31,22 @@ impl Engine {
     }
 
     /// Resets the internal state for a new game
+    ///
+    /// Resets everything except the [`Engine::debug()`] flag
     pub fn reset_game(&mut self) {
-        self.board = Board::default();
+        *self = Self {
+            debug: self.debug,
+            ..Default::default()
+        };
+    }
+
+    /// Resets internal search parameters and flags for a new search
+    ///
+    /// E.g. the best move found, the current search depth, etc.
+    fn reset_search_params(&mut self) {
+        self.stop_time = None;
+        self.current_search_depth = 1;
+        self.best_move_found = None;
     }
 
     /// Sets the board to the given position
@@ -43,6 +58,7 @@ impl Engine {
         fen: Option<&str>,
         moves: impl Iterator<Item = ChessMove>,
     ) -> Result<(), anyhow::Error> {
+        // Setup board
         let mut board = if let Some(fen) = fen {
             Board::from_str(fen).map_err(|e| anyhow::Error::msg(e))?
         } else {
@@ -52,9 +68,17 @@ impl Engine {
         moves.for_each(|mv| board = board.make_move_new(mv));
         self.board = board;
 
+        // Clean up for the upcoming search
+        // We do this here, because we're allowed to block while setting up,
+        // and this way we don't use up precious search time
+        self.reset_search_params();
+
         Ok(())
     }
 
+    /// Searches for the best move on the position setup in [`Engine::set_position`]
+    ///
+    /// If [`Engine::set_position`] is not called, then the default chess starting position is used
     pub fn search(&mut self, options: UciSearchOptions) -> anyhow::Result<ChessMove> {
         // Determine stop time
         if !options.infinite {
@@ -96,8 +120,6 @@ impl Engine {
         }
 
         // Search
-        self.current_search_depth = 1;
-
         loop {
             println!(
                 "{}",
@@ -105,6 +127,8 @@ impl Engine {
             );
 
             let (mv, score) = self.evaluate_board(&self.board, 1);
+            self.best_move_found =
+                Some(mv.context("Asked to search on a position with no legal moves")?); // todo don't do this if early termination, until ID ordering is impld
 
             println!(
                 "{}",
@@ -114,7 +138,9 @@ impl Engine {
             if self.stop_time.is_some() && self.stop_time.unwrap() < Instant::now() {
                 // Out of time, spit out what we got
                 // TODO: handle stop command if stop_time is None
-                return mv.context("Asked to search on a position with no legal moves");
+                return self
+                    .best_move_found
+                    .context("Failed to search even a single depth level");
             } else {
                 self.current_search_depth += 1;
             }
