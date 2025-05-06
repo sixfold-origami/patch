@@ -79,11 +79,11 @@ impl PartialOrd for Score {
             // If both scores are mates, then the order is:
             // M0 < -M1 < -Mn < Mn < M1
             (Score::Mate(m1), Score::Mate(m2)) => {
-                if m1.is_negative() && m2.is_negative() {
+                if m1 <= &0 && m2 <= &0 {
                     Some(m2.cmp(m1)) // Reverse, since lower values are actually better
-                } else if m1.is_negative() && m2.is_positive() {
+                } else if m1 <= &0 && m2.is_positive() {
                     Some(Ordering::Less)
-                } else if m1.is_positive() && m2.is_negative() {
+                } else if m1.is_positive() && m2 <= &0 {
                     Some(Ordering::Greater)
                 } else {
                     Some(m2.cmp(m1)) // Again, lower is better
