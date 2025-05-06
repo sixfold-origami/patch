@@ -17,10 +17,13 @@ fn main() -> anyhow::Result<()> {
 
     // Stash changes, if any
     println!("Stashing uncommitted changes");
-    let child = Command::new("git")
-        .args(["stash", "create", GIT_STASH_NAME])
-        .spawn();
-    drive_spawned_child(child, "git stash", true)?;
+    let output = Command::new("git")
+        .args(["stash", "-m", GIT_STASH_NAME])
+        .output()
+        .expect("Failed to start command: git stash")
+        .stdout;
+    let output = String::from_utf8(output).expect("Failed to parse command output from utf-8");
+    let stashed = output != "No local changes to save\n";
 
     // Swap to master
     println!("Switching to master");
@@ -44,11 +47,13 @@ fn main() -> anyhow::Result<()> {
     let child = Command::new("git").args(["switch", "-"]).spawn();
     drive_spawned_child(child, "git switch", true)?;
 
-    println!("Applying previously stashed changes");
-    let child = Command::new("git")
-        .args(["stash", "pop", GIT_STASH_NAME])
-        .spawn();
-    drive_spawned_child(child, "git stash pop", false)?; // Ignore exit code, as this can fail if there is no stash
+    if stashed {
+        println!("Applying previously stashed changes");
+        let child = Command::new("git")
+            .args(["stash", "pop", GIT_STASH_NAME])
+            .spawn();
+        drive_spawned_child(child, "git stash pop", false)?; // Ignore exit code, as this can fail if there is no stash
+    }
 
     // Test
     println!(
@@ -65,7 +70,7 @@ fn main() -> anyhow::Result<()> {
             "name=patch-master",
             "-each",
             "proto=uci",
-            "tc=40/60",
+            "tc=20/20",
             "-rounds",
             "1000",
             "-sprt",
@@ -84,7 +89,7 @@ fn get_rev() -> String {
     let output = Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
         .output()
-        .expect("Failed to get git rev")
+        .expect("Failed to start command: git rev")
         .stdout;
 
     let mut output = String::from_utf8(output).expect("Failed to parse command output from utf-8");
