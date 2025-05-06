@@ -8,13 +8,14 @@ use uci_parser::{UciInfo, UciResponse, UciScore, UciSearchOptions};
 
 use crate::score::Score;
 
-const DEPTH_LIMIT: u8 = 6;
-
 #[derive(Debug, Default)]
 pub struct Engine {
     debug: bool,
+
     board: Board,
+
     stop_time: Option<Instant>,
+    current_search_depth: u8,
 }
 
 impl Engine {
@@ -87,18 +88,29 @@ impl Engine {
         }
 
         // Search
-        let (mv, score) = self.evaluate_board(&self.board, 1);
+        self.current_search_depth = 1;
 
-        println!(
-            "{}",
-            UciResponse::info(
-                UciInfo::new()
-                    .depth(DEPTH_LIMIT)
-                    .score(UciScore::from(score))
-            )
-        );
+        loop {
+            println!(
+                "{}",
+                UciResponse::info(UciInfo::new().depth(self.current_search_depth))
+            );
 
-        mv.context("Asked to search on a position with no legal moves")
+            let (mv, score) = self.evaluate_board(&self.board, 1);
+
+            println!(
+                "{}",
+                UciResponse::info(UciInfo::new().score(UciScore::from(score)))
+            );
+
+            if self.stop_time.is_some() && self.stop_time.unwrap() < Instant::now() {
+                // Out of time, spit out what we got
+                // TODO: handle stop command if stop_time is None
+                return mv.context("Asked to search on a position with no legal moves");
+            } else {
+                self.current_search_depth += 1;
+            }
+        }
     }
 
     /// Evaluates the provided board, assuming we are up to move
@@ -116,7 +128,7 @@ impl Engine {
                 return (None, Score::cp(0));
             }
             BoardStatus::Ongoing => {
-                if depth == DEPTH_LIMIT {
+                if depth == self.current_search_depth {
                     // Hueristic based on material
                     (None, self.material_hueristic(board))
                 } else {
