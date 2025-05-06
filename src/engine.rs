@@ -57,7 +57,11 @@ impl Engine {
 
         println!(
             "{}",
-            UciResponse::info(UciInfo::new().depth(4).score(UciScore::from(score)))
+            UciResponse::info(
+                UciInfo::new()
+                    .depth(DEPTH_LIMIT)
+                    .score(UciScore::from(score))
+            )
         );
 
         mv.expect("Asked to search on a position with no legal moves")
