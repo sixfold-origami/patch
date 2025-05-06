@@ -49,9 +49,7 @@ fn main() -> anyhow::Result<()> {
 
     if stashed {
         println!("Applying previously stashed changes");
-        let child = Command::new("git")
-            .args(["stash", "pop", GIT_STASH_NAME])
-            .spawn();
+        let child = Command::new("git").args(["stash", "pop"]).spawn();
         drive_spawned_child(child, "git stash pop", false)?; // Ignore exit code, as this can fail if there is no stash
     }
 
