@@ -1,18 +1,20 @@
+use anyhow::Context;
 use rayon::iter::ParallelIterator;
-use std::str::FromStr;
+use std::{str::FromStr, time::Instant};
 
-use chess::{Board, BoardStatus, ChessMove, MoveGen, Piece, Square};
+use chess::{Board, BoardStatus, ChessMove, Color, MoveGen, Piece, Square};
 use rayon::iter::{IntoParallelIterator, ParallelBridge};
-use uci_parser::{UciInfo, UciResponse, UciScore};
+use uci_parser::{UciInfo, UciResponse, UciScore, UciSearchOptions};
 
 use crate::score::Score;
 
-const DEPTH_LIMIT: u8 = 5;
+const DEPTH_LIMIT: u8 = 6;
 
 #[derive(Debug, Default)]
 pub struct Engine {
-    board: Board,
     debug: bool,
+    board: Board,
+    stop_time: Option<Instant>,
 }
 
 impl Engine {
@@ -52,8 +54,40 @@ impl Engine {
         Ok(())
     }
 
-    pub fn search(&self) -> ChessMove {
-        let (mv, score) = self.evaluate_board(&self.board, 0);
+    pub fn search(&mut self, options: UciSearchOptions) -> anyhow::Result<ChessMove> {
+        // Determine stop time
+        if !options.infinite {
+            // In infinite mode, we search until told to stop
+            // Otherwise, we figure out our time control
+
+            if let Some(movetime) = options.movetime {
+                // Search for the provided duration
+                self.stop_time = Some(
+                    Instant::now()
+                        .checked_add(movetime)
+                        .context("Failed to add provided movetime to current instant")?,
+                );
+            } else {
+                if let (Some(time), Some(inc)) = match self.board.side_to_move() {
+                    Color::White => (options.wtime, options.winc),
+                    Color::Black => (options.btime, options.binc),
+                } {
+                    // Basic thinking time hueristic
+                    let thinking_time = time / 20 + inc / 2;
+
+                    self.stop_time = Some(
+                        Instant::now()
+                            .checked_add(thinking_time)
+                            .context("Failed to add thinking time to current instant")?,
+                    );
+                } else {
+                    unimplemented!("Got unimplemented time control options");
+                }
+            }
+        }
+
+        // Search
+        let (mv, score) = self.evaluate_board(&self.board, 1);
 
         println!(
             "{}",
@@ -64,7 +98,7 @@ impl Engine {
             )
         );
 
-        mv.expect("Asked to search on a position with no legal moves")
+        mv.context("Asked to search on a position with no legal moves")
     }
 
     /// Evaluates the provided board, assuming we are up to move
