@@ -69,12 +69,20 @@ impl Engine {
                         .context("Failed to add provided movetime to current instant")?,
                 );
             } else {
-                if let (Some(time), Some(inc)) = match self.board.side_to_move() {
+                let (time, inc) = match self.board.side_to_move() {
                     Color::White => (options.wtime, options.winc),
                     Color::Black => (options.btime, options.binc),
-                } {
+                };
+
+                if let Some(time) = time {
                     // Basic thinking time hueristic
-                    let thinking_time = time / 20 + inc / 2;
+                    let thinking_time = if let Some(inc) = inc {
+                        time / 20 + inc / 2
+                    } else if let Some(movestogo) = options.movestogo {
+                        time / movestogo
+                    } else {
+                        unimplemented!("Got unimplemented time control options");
+                    };
 
                     self.stop_time = Some(
                         Instant::now()
