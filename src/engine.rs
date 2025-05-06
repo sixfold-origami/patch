@@ -7,7 +7,7 @@ use uci_parser::{UciInfo, UciResponse, UciScore};
 
 use crate::score::Score;
 
-const DEPTH_LIMIT: u8 = 4;
+const DEPTH_LIMIT: u8 = 5;
 
 #[derive(Debug, Default)]
 pub struct Engine {
