@@ -59,8 +59,8 @@ fn main() -> Result<(), anyhow::Error> {
             "-rounds",
             "1000",
             "-sprt",
-            "elo0=-10",
-            "elo1=0",
+            "elo0=0",
+            "elo1=10",
             "alpha=0.05",
             "beta=0.05",
         ])
