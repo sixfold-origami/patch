@@ -1,3 +1,5 @@
+//! See [`Score`]
+
 use std::cmp::Ordering;
 
 use uci_parser::UciScore;
@@ -53,7 +55,7 @@ impl PartialOrd for Score {
             // If both scores are in centipawns, then the internal values can be compared directly
             (Score::Centipawns(s1), Score::Centipawns(s2)) => Some(s1.cmp(s2)),
             // If they're different, then the ordering is always:
-            // (we get mated) < (negative score) < (positive score) < (they get mated)
+            // (we get mated) < (negative centipawns) < (positive centipawns) < (they get mated)
             (Score::Centipawns(_), Score::Mate(m)) => {
                 if m <= &0 {
                     // We are getting mated.
