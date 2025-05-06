@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 engine.set_position(fen.as_ref().map(|s| s.as_str()), moves)?;
             }
             UciCommand::Go(options) => {
-                // We're too stupid to do a real search, but the benefit is that we can respond right away :clueless:
+                // The stop command isn't implemented, so we just block until we're done thinking
                 let mv = engine.search(options)?;
                 println!(
                     "{}",
