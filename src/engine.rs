@@ -121,11 +121,6 @@ impl Engine {
 
         // Search
         loop {
-            println!(
-                "{}",
-                UciResponse::info(UciInfo::new().depth(self.current_search_depth))
-            );
-
             let eval = self.evaluate_board(&self.board, 0);
 
             if !eval.terminated_early {
@@ -139,6 +134,7 @@ impl Engine {
                         UciInfo::new()
                             .score(UciScore::from(eval.score))
                             .pv([eval_mv.to_string()])
+                            .depth(self.current_search_depth)
                     )
                 );
 
