@@ -54,20 +54,22 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Test
+    let ext = if cfg!(windows) { ".exe" } else { "" };
+
     println!(
         "Testing {} (experimental) against {} (master)",
         &experimental_rev, &maseter_rev
     );
-    let child = Command::new("cutechess-cli.exe")
+    let child = Command::new(format!("cutechess-cli{}", ext))
         .args([
             "-engine",
-            "cmd=./target/experimental/release/patch.exe",
+            &format!("cmd=./target/experimental/release/patch{}", ext),
             "name=patch-experimental",
             "-engine",
-            "cmd=./target/master/release/patch.exe",
+            &format!("cmd=./target/master/release/patch{}", ext),
             "name=patch-master",
             "-concurrency",
-            "2",
+            "8",
             "-each",
             "proto=uci",
             "tc=40/120",
