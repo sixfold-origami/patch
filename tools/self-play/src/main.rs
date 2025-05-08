@@ -97,7 +97,7 @@ fn main() -> anyhow::Result<()> {
             "proto=uci",
             &format!("tc={}", args.tc),
             "-rounds",
-            "1000",
+            "10000",
             "-sprt",
             &format!("elo0={}", args.elo0),
             &format!("elo1={}", args.elo1),
