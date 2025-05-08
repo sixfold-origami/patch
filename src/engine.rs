@@ -138,11 +138,6 @@ impl Engine {
                     )
                 );
 
-                // Artificially cap depth at 5 for testing
-                if self.current_search_depth == 5 {
-                    return Ok(eval_mv);
-                }
-
                 // TODO: we can still do this on early termination if the tree search is ordered based on previous search depths
                 // TODO: handle stop command if stop_time is None
                 self.best_move_found = Some(eval_mv);
