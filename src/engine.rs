@@ -248,24 +248,24 @@ impl Engine {
         let theirs = board.color_combined(!board.side_to_move());
 
         // Get pieces and do sums
-        let mut pawns: i16 = 0;
+        let mut cp: i16 = 0;
 
-        pawns += ((board.pieces(Piece::Pawn) & *mine).0.count_ones()) as i16;
-        pawns -= ((board.pieces(Piece::Pawn) & *theirs).0.count_ones()) as i16;
+        cp += ((board.pieces(Piece::Pawn) & *mine).0.count_ones() * 100) as i16;
+        cp -= ((board.pieces(Piece::Pawn) & *theirs).0.count_ones() * 100) as i16;
 
-        pawns += ((board.pieces(Piece::Knight) & *mine).0.count_ones() * 3) as i16;
-        pawns -= ((board.pieces(Piece::Knight) & *theirs).0.count_ones() * 3) as i16;
+        cp += ((board.pieces(Piece::Knight) & *mine).0.count_ones() * 350) as i16;
+        cp -= ((board.pieces(Piece::Knight) & *theirs).0.count_ones() * 350) as i16;
 
-        pawns += ((board.pieces(Piece::Bishop) & *mine).0.count_ones() * 3) as i16;
-        pawns -= ((board.pieces(Piece::Bishop) & *theirs).0.count_ones() * 3) as i16;
+        cp += ((board.pieces(Piece::Bishop) & *mine).0.count_ones() * 350) as i16;
+        cp -= ((board.pieces(Piece::Bishop) & *theirs).0.count_ones() * 350) as i16;
 
-        pawns += ((board.pieces(Piece::Rook) & *mine).0.count_ones() * 5) as i16;
-        pawns -= ((board.pieces(Piece::Rook) & *theirs).0.count_ones() * 5) as i16;
+        cp += ((board.pieces(Piece::Rook) & *mine).0.count_ones() * 525) as i16;
+        cp -= ((board.pieces(Piece::Rook) & *theirs).0.count_ones() * 525) as i16;
 
-        pawns += ((board.pieces(Piece::Queen) & *mine).0.count_ones() * 9) as i16;
-        pawns -= ((board.pieces(Piece::Queen) & *theirs).0.count_ones() * 9) as i16;
+        cp += ((board.pieces(Piece::Queen) & *mine).0.count_ones() * 1000) as i16;
+        cp -= ((board.pieces(Piece::Queen) & *theirs).0.count_ones() * 1000) as i16;
 
-        Score::cp(pawns * 100)
+        Score::cp(cp)
     }
 }
 
