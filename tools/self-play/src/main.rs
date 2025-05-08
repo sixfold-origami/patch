@@ -1,11 +1,34 @@
 use std::process::{Child, Command};
 
 use anyhow::{Context, bail};
+use clap::Parser;
 
 /// Name for the git stash to put any uncommited changes into
 const GIT_STASH_NAME: &str = "__internal__ self play stash";
 
+/// Utility to set up the engine to play against an older version of itself
+#[derive(Parser, Debug)]
+struct Args {
+    /// Time control to use
+    #[arg(short, long, default_value = "40/60")]
+    tc: String,
+
+    /// Number of games to run concurrently
+    #[arg(short, long, default_value_t = 4)]
+    concurrency: u8,
+
+    /// Elo 0 to use for the SPRT test
+    #[arg(short = 'n', long)]
+    elo0: f32,
+
+    /// Elo 1 to use for the SPRT test
+    #[arg(short = 'a', long)]
+    elo1: f32,
+}
+
 fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
     // Build current rev
     println!("Building experimental");
     let experimental_rev = get_rev();
@@ -69,15 +92,15 @@ fn main() -> anyhow::Result<()> {
             &format!("cmd=./target/master/release/patch{}", ext),
             "name=patch-master",
             "-concurrency",
-            "4",
+            &args.concurrency.to_string(),
             "-each",
             "proto=uci",
-            "tc=40/300",
+            &format!("tc={}", args.tc),
             "-rounds",
             "1000",
             "-sprt",
-            "elo0=0",
-            "elo1=10",
+            &format!("elo0={}", args.elo0),
+            &format!("elo1={}", args.elo1),
             "alpha=0.05",
             "beta=0.05",
         ])
