@@ -1,12 +1,22 @@
 use anyhow::Context;
 use rayon::iter::ParallelIterator;
-use std::{cmp::Ordering, str::FromStr, time::Instant};
+use std::{
+    cmp::Ordering,
+    str::FromStr,
+    time::{Duration, Instant},
+};
 
 use chess::{Board, BoardStatus, ChessMove, Color, MoveGen, Piece};
 use rayon::iter::{IntoParallelIterator, ParallelBridge};
 use uci_parser::{UciInfo, UciResponse, UciScore, UciSearchOptions};
 
 use crate::score::Score;
+
+/// A [`Duration`] subtracted from each move's thinking time, to make sure we don't accidentally go over
+///
+/// Our time to respond is usually slightly higher than our planned thinking time,
+/// because it takes some time to terminate the search early, and to spit out our answer to `stdout`
+const SLACK_TIME: Duration = Duration::from_millis(10);
 
 #[derive(Debug, Default)]
 pub struct Engine {
@@ -76,11 +86,20 @@ impl Engine {
         Ok(())
     }
 
-    /// Searches for the best move on the position setup in [`Engine::set_position`]
+    /// Determines `self.stop_time` based on the provided options
     ///
-    /// If [`Engine::set_position`] is not called, then the default chess starting position is used
-    pub fn search(&mut self, options: UciSearchOptions) -> anyhow::Result<ChessMove> {
-        // Determine stop time
+    /// This may be a NOP if the options do not indicate that a stop time should be set:
+    /// e.g. if the movetime is infinite.
+    /// (Actually resetting the stop time to [`None`] is handled in [`Self::reset_search_params`].)
+    /// In cases where a `stop_time` is calculated,
+    /// [`SLACK_TIME`] milliseconds is subtracted, to account for tree termination and writing the output
+    ///
+    /// - If a finite movetime is specified, then that is used
+    /// - Otherwise, if remaining time and increments are specified, then those are used to determine a reasonable thinking time
+    /// - Otherwise, if moves to go is specified, then that + the remaining time is used to determine a reasonable thinking time
+    /// - Otherwise, it will either panic (unimplemented), or set the `self.stop_time` to [`None`]
+    #[inline]
+    pub fn calculate_stop_time(&mut self, options: UciSearchOptions) -> anyhow::Result<()> {
         if !options.infinite {
             // In infinite mode, we search until told to stop
             // Otherwise, we figure out our time control
@@ -89,7 +108,7 @@ impl Engine {
                 // Search for the provided duration
                 self.stop_time = Some(
                     Instant::now()
-                        .checked_add(movetime)
+                        .checked_add(movetime - SLACK_TIME)
                         .context("Failed to add provided movetime to current instant")?,
                 );
             } else {
@@ -110,7 +129,7 @@ impl Engine {
 
                     self.stop_time = Some(
                         Instant::now()
-                            .checked_add(thinking_time)
+                            .checked_add(thinking_time - SLACK_TIME)
                             .context("Failed to add thinking time to current instant")?,
                     );
                 } else {
@@ -118,6 +137,16 @@ impl Engine {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    /// Searches for the best move on the position setup in [`Engine::set_position`]
+    ///
+    /// If [`Engine::set_position`] is not called, then the default chess starting position is used
+    pub fn search(&mut self, options: UciSearchOptions) -> anyhow::Result<ChessMove> {
+        // Determine and set stop time
+        self.calculate_stop_time(options)?;
 
         // Search
         loop {
