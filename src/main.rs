@@ -39,9 +39,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
                 engine.set_position(fen.as_ref().map(|s| s.as_str()), moves)?;
             }
-            UciCommand::Go(_uci_search_options) => {
-                // We're too stupid to do a real search, but the benefit is that we can respond right away :clueless:
-                let mv = engine.search();
+            UciCommand::Go(options) => {
+                // The stop command isn't implemented, so we just block until we're done thinking
+                let mv = engine.search(options)?;
                 println!(
                     "{}",
                     UciResponse::BestMove {
