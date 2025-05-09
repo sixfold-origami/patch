@@ -39,8 +39,14 @@ check:
     cargo check
 alias c := check
 
-# Play a tournament against itself
+# Play a tournament against itself, looking for an improvement in ELO
 [group('testing')]
-self-play:
-    cargo run --release --package self-play
-alias sp := self-play
+self-play-gain *args:
+    cargo run --release --package self-play -- --elo0 0 --elo1 10 {{ args }}
+alias spg := self-play-gain
+
+# Play a tournament against itself, looking for a regression in ELO
+[group('testing')]
+self-play-regression *args:
+    cargo run --release --package self-play -- --elo0=-10 --elo1 0 {{ args }}
+alias spr := self-play-regression
