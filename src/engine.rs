@@ -233,7 +233,7 @@ impl Engine {
 
                             let (a, b) = { (*alpha.read(), *beta.read()) };
                             let eval = BoardEvaluation::from_child(
-                                self.evaluate_board(&next, a.flip(), b.flip(), depth + 1),
+                                self.evaluate_board(&next, b.flip(), a.flip(), depth + 1),
                                 mv,
                             );
 
