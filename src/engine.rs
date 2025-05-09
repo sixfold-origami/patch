@@ -248,7 +248,8 @@ impl Engine {
                             }
 
                             if eval.score >= beta {
-                                return Some(*best.read());
+                                let best = { *best.read() };
+                                return Some(best);
                             }
 
                             None
