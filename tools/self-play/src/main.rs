@@ -96,6 +96,7 @@ fn main() -> anyhow::Result<()> {
             "-each",
             "proto=uci",
             &format!("tc={}", args.tc),
+            "timemargin=500",
             "-rounds",
             "10000",
             "-sprt",

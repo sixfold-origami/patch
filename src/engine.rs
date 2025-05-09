@@ -16,7 +16,7 @@ use crate::score::Score;
 ///
 /// Our time to respond is usually slightly higher than our planned thinking time,
 /// because it takes some time to terminate the search early, and to spit out our answer to `stdout`
-const SLACK_TIME: Duration = Duration::from_millis(10);
+const SLACK_TIME: Duration = Duration::from_millis(20);
 
 #[derive(Debug, Default)]
 pub struct Engine {
