@@ -219,7 +219,6 @@ impl Engine {
 
                     let best = RwLock::new(BoardEvaluation::min());
                     let alpha = RwLock::new(alpha);
-                    let beta = RwLock::new(beta);
 
                     // This will always return some non-identity value,
                     // as long as the above iterator has at least one valid move.
@@ -231,9 +230,9 @@ impl Engine {
                         .find_map_any(|mv| {
                             let next = board.make_move_new(mv);
 
-                            let (a, b) = { (*alpha.read(), *beta.read()) };
+                            let a = { *alpha.read() };
                             let eval = BoardEvaluation::from_child(
-                                self.evaluate_board(&next, b.flip(), a.flip(), depth + 1),
+                                self.evaluate_board(&next, beta.flip(), a.flip(), depth + 1),
                                 mv,
                             );
 
@@ -248,7 +247,7 @@ impl Engine {
                                 }
                             }
 
-                            if eval.score >= *beta.read() {
+                            if eval.score >= beta {
                                 return Some(*best.read());
                             }
 
