@@ -1,13 +1,13 @@
-use anyhow::Context;
-use rayon::iter::ParallelIterator;
 use std::{
     cmp::Ordering,
     str::FromStr,
     time::{Duration, Instant},
 };
 
+use anyhow::Context;
 use chess::{Board, BoardStatus, ChessMove, Color, MoveGen, Piece};
-use rayon::iter::{IntoParallelIterator, ParallelBridge};
+use parking_lot::RwLock;
+use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use uci_parser::{UciInfo, UciResponse, UciScore, UciSearchOptions};
 
 use crate::score::Score;
@@ -150,7 +150,7 @@ impl Engine {
 
         // Search
         loop {
-            let eval = self.evaluate_board(&self.board, 0);
+            let eval = self.evaluate_board(&self.board, Score::min(), Score::max(), 0);
 
             if !eval.terminated_early {
                 let eval_mv = eval
@@ -187,7 +187,13 @@ impl Engine {
     /// Branches based on moves if possible.
     /// Returns the score for this position, and the best move it found,
     /// as long as we are not in a terminal case (recursion limit, stalemate, or checkmate).
-    fn evaluate_board(&self, board: &Board, depth: u8) -> BoardEvaluation {
+    fn evaluate_board(
+        &self,
+        board: &Board,
+        alpha: Score,
+        beta: Score,
+        depth: u8,
+    ) -> BoardEvaluation {
         match board.status() {
             BoardStatus::Checkmate => {
                 // We lost :(
@@ -211,6 +217,10 @@ impl Engine {
                     // Down the tree we go
                     let mut iter = MoveGen::new_legal(board);
 
+                    let best = RwLock::new(BoardEvaluation::min());
+                    let alpha = RwLock::new(alpha);
+                    let beta = RwLock::new(beta);
+
                     // This will always return some non-identity value,
                     // as long as the above iterator has at least one valid move.
                     // This is always the case, because the cases where no moves are available (mates)
@@ -218,25 +228,33 @@ impl Engine {
                     (&mut iter)
                         .par_bridge()
                         .into_par_iter()
-                        .map(|mv| {
+                        .find_map_any(|mv| {
                             let next = board.make_move_new(mv);
-                            BoardEvaluation::from_child(self.evaluate_board(&next, depth + 1), mv)
-                        })
-                        .reduce(
-                            || BoardEvaluation::min(),
-                            |acc, e| {
-                                if e > acc {
-                                    BoardEvaluation::new(
-                                        e.mv,
-                                        e.score,
-                                        // Early termination propagates upward
-                                        e.terminated_early || acc.terminated_early,
-                                    )
-                                } else {
-                                    acc
+
+                            let (a, b) = { (*alpha.read(), *beta.read()) };
+                            let eval = BoardEvaluation::from_child(
+                                self.evaluate_board(&next, a.flip(), b.flip(), depth + 1),
+                                mv,
+                            );
+
+                            if eval > *best.read() {
+                                {
+                                    let mut best = best.write();
+                                    *best = eval;
                                 }
-                            },
-                        )
+                                if eval.score > *alpha.read() {
+                                    let mut alpha = alpha.write();
+                                    *alpha = eval.score;
+                                }
+                            }
+
+                            if eval.score >= *beta.read() {
+                                return Some(*best.read());
+                            }
+
+                            None
+                        })
+                        .unwrap_or(*best.read())
                 }
             }
         }
@@ -271,7 +289,7 @@ impl Engine {
 
 /// Return value of [`Engine::evaluate_board`]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct BoardEvaluation {
+pub struct BoardEvaluation {
     /// The best move found in this subtree
     mv: Option<ChessMove>,
     /// The score of this subtree
@@ -283,7 +301,7 @@ struct BoardEvaluation {
 
 impl BoardEvaluation {
     /// Constructs a new [`BoardEvaluation`]
-    fn new(mv: Option<ChessMove>, score: Score, terminated_early: bool) -> Self {
+    pub fn new(mv: Option<ChessMove>, score: Score, terminated_early: bool) -> Self {
         Self {
             mv,
             score,

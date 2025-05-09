@@ -47,6 +47,18 @@ impl Score {
             }
         }
     }
+
+    /// The minimum possible score, M0
+    #[inline]
+    pub fn min() -> Self {
+        Self::Mate(0)
+    }
+
+    /// The maximum possible score, M1
+    #[inline]
+    pub fn max() -> Self {
+        Self::Mate(1)
+    }
 }
 
 impl Ord for Score {
