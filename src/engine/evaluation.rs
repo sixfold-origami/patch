@@ -53,7 +53,7 @@ fn piece_table_eval(board: &Board) -> i16 {
 
     let inverse_phase = 24 - phase;
 
-    (0..64)
+    let (mg_score, eg_score) = (0..64)
         .into_iter()
         .map(|i| {
             let square = Square::new(i);
@@ -61,14 +61,14 @@ fn piece_table_eval(board: &Board) -> i16 {
             let piece = board.piece_on(square);
             let color = board.color_on(square);
             match (piece, color) {
-                (None, None) => 0, // No piece here, just return the identity
+                (None, None) => (0, 0), // No piece here, just return the identity
                 (Some(piece), Some(color)) => {
                     let index = match board.side_to_move() {
                         Color::White => i,
                         // Piece tables are always relative to the current player,
                         // But the square indices are absolute (starting at A1).
                         // So, black must flip the index to get the right orientation.
-                        Color::Black => 64 - i,
+                        Color::Black => i ^ 56,
                     } as usize;
 
                     let mg_score = match piece {
@@ -89,18 +89,19 @@ fn piece_table_eval(board: &Board) -> i16 {
                         Piece::King => ENDGAME_KING_VALUE[index],
                     };
 
-                    let swap = if color == board.side_to_move() {
-                        1 // Our pieces
+                    if color == board.side_to_move() {
+                        (mg_score, eg_score)
                     } else {
-                        -1 // Their pieces, so worth negative points
-                    };
-
-                    (mg_score * phase + eg_score * inverse_phase) * swap
+                        (-mg_score, -eg_score)
+                    }
                 }
                 _ => unreachable!(),
             }
         })
-        .sum()
+        .reduce(|(mg_acc, eg_acc), (mg_score, eg_score)| (mg_acc + mg_score, eg_acc + eg_score))
+        .unwrap();
+
+    (mg_score * phase + eg_score * inverse_phase) / 24
 }
 
 /// Contains all the values for the piece tables and material values
