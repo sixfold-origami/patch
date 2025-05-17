@@ -5,12 +5,15 @@ use std::{
 };
 
 use anyhow::Context;
-use chess::{Board, BoardStatus, ChessMove, Color, MoveGen, Piece};
+use chess::{Board, BoardStatus, ChessMove, Color, MoveGen};
+use evaluation::eval_heuristic;
 use parking_lot::RwLock;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use uci_parser::{UciInfo, UciResponse, UciScore, UciSearchOptions};
 
 use crate::score::Score;
+
+pub mod evaluation;
 
 /// A [`Duration`] subtracted from each move's thinking time, to make sure we don't accidentally go over
 ///
@@ -204,7 +207,7 @@ impl Engine {
                 if depth == self.current_search_depth {
                     // Terminate at max depth
                     // Hueristic based on material
-                    BoardEvaluation::score(self.material_hueristic(board))
+                    BoardEvaluation::score(eval_heuristic(board))
                 } else if self
                     .stop_time
                     .map(|st| Instant::now() > st)
@@ -212,7 +215,7 @@ impl Engine {
                 {
                     // Early termination on time
                     // Hueristic based on material
-                    BoardEvaluation::score_early(self.material_hueristic(board))
+                    BoardEvaluation::score_early(eval_heuristic(board))
                 } else {
                     // Down the tree we go
                     let mut iter = MoveGen::new_legal(board);
@@ -258,32 +261,6 @@ impl Engine {
                 }
             }
         }
-    }
-
-    /// Scores the provided board based on material counts, assuming that we are up to move
-    fn material_hueristic(&self, board: &Board) -> Score {
-        let mine = board.color_combined(board.side_to_move());
-        let theirs = board.color_combined(!board.side_to_move());
-
-        // Get pieces and do sums
-        let mut cp: i16 = 0;
-
-        cp += ((board.pieces(Piece::Pawn) & *mine).0.count_ones() * 100) as i16;
-        cp -= ((board.pieces(Piece::Pawn) & *theirs).0.count_ones() * 100) as i16;
-
-        cp += ((board.pieces(Piece::Knight) & *mine).0.count_ones() * 350) as i16;
-        cp -= ((board.pieces(Piece::Knight) & *theirs).0.count_ones() * 350) as i16;
-
-        cp += ((board.pieces(Piece::Bishop) & *mine).0.count_ones() * 350) as i16;
-        cp -= ((board.pieces(Piece::Bishop) & *theirs).0.count_ones() * 350) as i16;
-
-        cp += ((board.pieces(Piece::Rook) & *mine).0.count_ones() * 525) as i16;
-        cp -= ((board.pieces(Piece::Rook) & *theirs).0.count_ones() * 525) as i16;
-
-        cp += ((board.pieces(Piece::Queen) & *mine).0.count_ones() * 1000) as i16;
-        cp -= ((board.pieces(Piece::Queen) & *theirs).0.count_ones() * 1000) as i16;
-
-        Score::cp(cp)
     }
 }
 
