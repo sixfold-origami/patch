@@ -63,7 +63,7 @@ fn piece_table_eval(board: &Board) -> i16 {
             match (piece, color) {
                 (None, None) => (0, 0), // No piece here, just return the identity
                 (Some(piece), Some(color)) => {
-                    let index = match board.side_to_move() {
+                    let index = match color {
                         Color::White => i,
                         // Piece tables are always relative to the current player,
                         // But the square indices are absolute (starting at A1).
