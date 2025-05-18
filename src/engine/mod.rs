@@ -1,5 +1,6 @@
 use std::{
     cmp::Ordering,
+    iter,
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -180,7 +181,8 @@ impl Engine {
                     UciResponse::info(
                         UciInfo::new()
                             .score(UciScore::from(eval.score))
-                            .pv([eval_mv.to_string()])
+                            .pv(iter::once(eval_mv.to_string())
+                                .chain(eval.pv.iter().map(|mv| mv.to_string())))
                             .depth(self.current_search_depth)
                             .time(search_time_ms)
                     )
@@ -266,25 +268,27 @@ impl Engine {
                                 mv,
                             );
 
+                            let eval_score = eval.score;
+
                             if eval > *best.read() {
                                 {
                                     let mut best = best.write();
                                     *best = eval;
                                 }
-                                if eval.score > *alpha.read() {
+                                if eval_score > *alpha.read() {
                                     let mut alpha = alpha.write();
-                                    *alpha = eval.score;
+                                    *alpha = eval_score;
                                 }
                             }
 
-                            if eval.score >= beta {
-                                let best = { *best.read() };
+                            if eval_score >= beta {
+                                let best = { best.read().clone() };
                                 return Some(best);
                             }
 
                             None
                         })
-                        .unwrap_or(*best.read())
+                        .unwrap_or(best.read().clone())
                 }
             }
         }
@@ -292,10 +296,14 @@ impl Engine {
 }
 
 /// Return value of [`Engine::evaluate_board`]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoardEvaluation {
     /// The best move found in this subtree
     mv: Option<ChessMove>,
+    /// The principal variation found
+    ///
+    /// Does not include `mv`
+    pv: Vec<ChessMove>,
     /// The score of this subtree
     score: Score,
     /// Whether this subtree was terminated early,
@@ -304,23 +312,21 @@ pub struct BoardEvaluation {
 }
 
 impl BoardEvaluation {
-    /// Constructs a new [`BoardEvaluation`]
-    pub fn new(mv: Option<ChessMove>, score: Score, terminated_early: bool) -> Self {
-        Self {
-            mv,
-            score,
-            terminated_early,
-        }
-    }
-
     /// Constructs a [`BoardEvaluation`] from an evaluation coming out of a subtree
     ///
     /// This means that we must:
     /// - Flip the score, as children evaluate from their perspective
     /// - Paste in the move that got us from our board to the child board
-    fn from_child(child: Self, mv: ChessMove) -> Self {
+    fn from_child(mut child: Self, mv: ChessMove) -> Self {
+        let mut pv = Vec::with_capacity(child.pv.len() + 1);
+        if let Some(mv) = child.mv {
+            pv.push(mv);
+        }
+        pv.append(&mut child.pv);
+
         Self {
             mv: Some(mv),
+            pv,
             score: child.score.flip(),
             // If they terminated early, then so did we, technically
             terminated_early: child.terminated_early,
@@ -330,10 +336,11 @@ impl BoardEvaluation {
     /// Constructs a new [`BoardEvaluation`] when only the score is known,
     /// such as in mating positions and stalemates.
     ///
-    /// These positions are *terminal* inherently, so they are never considered an early termination
+    /// These positions are terminal *inherently*, so they are never considered an early termination
     fn score(score: Score) -> Self {
         Self {
             mv: None,
+            pv: Vec::new(),
             score,
             terminated_early: false,
         }
@@ -343,6 +350,7 @@ impl BoardEvaluation {
     fn score_early(score: Score) -> Self {
         Self {
             mv: None,
+            pv: Vec::new(),
             score,
             terminated_early: true,
         }
@@ -354,6 +362,7 @@ impl BoardEvaluation {
     fn min() -> Self {
         Self {
             mv: None,
+            pv: Vec::new(),
             score: Score::Mate(0),
             terminated_early: false,
         }
