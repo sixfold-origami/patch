@@ -30,6 +30,7 @@ pub struct Engine {
     stop_time: Option<Instant>,
     current_search_depth: u8,
     best_move_found: Option<ChessMove>,
+    depth_limit: Option<u8>,
 }
 
 impl Engine {
@@ -174,8 +175,19 @@ impl Engine {
                 // TODO: handle stop command if stop_time is None
                 self.best_move_found = Some(eval_mv);
 
-                // Deeper we go
-                self.current_search_depth += 1;
+                if self
+                    .depth_limit
+                    .map(|l| l == self.current_search_depth)
+                    .unwrap_or_default()
+                {
+                    // Early termination on depth limit
+                    return self
+                        .best_move_found
+                        .context("Failed to search even a single depth level");
+                } else {
+                    // Deeper we go
+                    self.current_search_depth += 1;
+                }
             } else {
                 // We are done here
                 return self
