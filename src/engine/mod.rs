@@ -182,6 +182,7 @@ impl Engine {
                             .score(UciScore::from(eval.score))
                             .pv([eval_mv.to_string()])
                             .depth(self.current_search_depth)
+                            .seldepth(eval.depth)
                             .time(search_time_ms)
                     )
                 );
@@ -227,14 +228,14 @@ impl Engine {
         match board.status() {
             BoardStatus::Checkmate => {
                 // We lost :(
-                BoardEvaluation::score(Score::Mate(0))
+                BoardEvaluation::score(Score::Mate(0), depth)
             }
-            BoardStatus::Stalemate => BoardEvaluation::score(Score::cp(0)),
+            BoardStatus::Stalemate => BoardEvaluation::score(Score::cp(0), depth),
             BoardStatus::Ongoing => {
                 if depth == self.current_search_depth {
                     // Terminate at max depth
                     // Hueristic based on material
-                    self.evaluate_board_quiescence(board, alpha, beta)
+                    self.evaluate_board_quiescence(board, alpha, beta, depth)
                 } else if self
                     .stop_time
                     .map(|st| Instant::now() > st)
@@ -242,7 +243,7 @@ impl Engine {
                 {
                     // Early termination on time
                     // Hueristic based on material
-                    BoardEvaluation::score_early(eval_heuristic(board))
+                    BoardEvaluation::score_early(eval_heuristic(board), depth)
                 } else {
                     // Down the tree we go
                     let mut iter = MoveGen::new_legal(board);
@@ -268,8 +269,7 @@ impl Engine {
 
                             if eval > *best.read() {
                                 {
-                                    let mut best = best.write();
-                                    *best = eval;
+                                    best.write().overwrite(eval);
                                 }
                                 if eval.score > *alpha.read() {
                                     let mut alpha = alpha.write();
@@ -298,13 +298,14 @@ impl Engine {
         board: &Board,
         alpha: Score,
         beta: Score,
+        depth: u8,
     ) -> BoardEvaluation {
         match board.status() {
             BoardStatus::Checkmate => {
                 // We lost :(
-                BoardEvaluation::score(Score::Mate(0))
+                BoardEvaluation::score(Score::Mate(0), depth)
             }
-            BoardStatus::Stalemate => BoardEvaluation::score(Score::cp(0)),
+            BoardStatus::Stalemate => BoardEvaluation::score(Score::cp(0), depth),
             BoardStatus::Ongoing => {
                 if self
                     .stop_time
@@ -313,7 +314,7 @@ impl Engine {
                 {
                     // Early termination on time
                     // Hueristic based on material
-                    BoardEvaluation::score_early(eval_heuristic(board))
+                    BoardEvaluation::score_early(eval_heuristic(board), depth)
                 } else {
                     // Down the tree we go
                     let mut iter = MoveGen::new_legal(board);
@@ -321,7 +322,7 @@ impl Engine {
 
                     let stand_pat = eval_heuristic(board);
                     if stand_pat >= beta {
-                        return BoardEvaluation::score(stand_pat);
+                        return BoardEvaluation::score(stand_pat, depth);
                     }
 
                     let alpha = if alpha < stand_pat {
@@ -329,7 +330,7 @@ impl Engine {
                     } else {
                         RwLock::new(alpha)
                     };
-                    let best = RwLock::new(BoardEvaluation::score(stand_pat));
+                    let best = RwLock::new(BoardEvaluation::score(stand_pat, depth));
 
                     (&mut iter)
                         .par_bridge()
@@ -339,7 +340,12 @@ impl Engine {
 
                             let a = { *alpha.read() };
                             let eval = BoardEvaluation::from_child(
-                                self.evaluate_board_quiescence(&next, beta.flip(), a.flip()),
+                                self.evaluate_board_quiescence(
+                                    &next,
+                                    beta.flip(),
+                                    a.flip(),
+                                    depth + 1,
+                                ),
                                 mv,
                             );
 
@@ -347,8 +353,7 @@ impl Engine {
                                 return Some(eval);
                             }
                             if eval > *best.read() {
-                                let mut best = best.write();
-                                *best = eval;
+                                best.write().overwrite(eval);
                             }
                             if eval.score > *alpha.read() {
                                 let mut alpha = alpha.write();
@@ -369,6 +374,8 @@ impl Engine {
 pub struct BoardEvaluation {
     /// The best move found in this subtree
     mv: Option<ChessMove>,
+    /// The depth that this evaluation came from
+    depth: u8,
     /// The score of this subtree
     score: Score,
     /// Whether this subtree was terminated early,
@@ -377,15 +384,6 @@ pub struct BoardEvaluation {
 }
 
 impl BoardEvaluation {
-    /// Constructs a new [`BoardEvaluation`]
-    pub fn new(mv: Option<ChessMove>, score: Score, terminated_early: bool) -> Self {
-        Self {
-            mv,
-            score,
-            terminated_early,
-        }
-    }
-
     /// Constructs a [`BoardEvaluation`] from an evaluation coming out of a subtree
     ///
     /// This means that we must:
@@ -394,6 +392,7 @@ impl BoardEvaluation {
     fn from_child(child: Self, mv: ChessMove) -> Self {
         Self {
             mv: Some(mv),
+            depth: child.depth,
             score: child.score.flip(),
             // If they terminated early, then so did we, technically
             terminated_early: child.terminated_early,
@@ -404,18 +403,20 @@ impl BoardEvaluation {
     /// such as in mating positions and stalemates.
     ///
     /// These positions are *terminal* inherently, so they are never considered an early termination
-    fn score(score: Score) -> Self {
+    fn score(score: Score, depth: u8) -> Self {
         Self {
             mv: None,
+            depth,
             score,
             terminated_early: false,
         }
     }
 
     /// Constructs a new [`BoardEvaluation`] for an early termination, using the score hueristic
-    fn score_early(score: Score) -> Self {
+    fn score_early(score: Score, depth: u8) -> Self {
         Self {
             mv: None,
+            depth,
             score,
             terminated_early: true,
         }
@@ -427,9 +428,18 @@ impl BoardEvaluation {
     fn min() -> Self {
         Self {
             mv: None,
+            depth: 0,
             score: Score::Mate(0),
             terminated_early: false,
         }
+    }
+
+    /// Overwrites the values of `self` with values of `other`, except for depth, which takes the max
+    fn overwrite(&mut self, other: Self) {
+        self.mv = other.mv;
+        self.score = other.score;
+        self.terminated_early = other.terminated_early;
+        self.depth = self.depth.max(other.depth);
     }
 }
 
