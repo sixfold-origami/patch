@@ -35,8 +35,8 @@ pub struct Engine {
     pv: Vec<ChessMove>,
     start_time: Option<Instant>,
     stop_time: Option<Instant>,
-    current_search_depth: u8,
-    depth_limit: Option<u8>,
+    current_search_depth: usize,
+    depth_limit: Option<usize>,
 }
 
 impl Engine {
@@ -164,7 +164,7 @@ impl Engine {
         self.calculate_stop_time(&options)?;
 
         // Set depth limit if provided
-        self.depth_limit = options.depth.as_ref().map(|d| *d as u8);
+        self.depth_limit = options.depth.as_ref().map(|d| *d as usize);
 
         // Search
         loop {
@@ -225,19 +225,19 @@ impl Engine {
         board: &Board,
         alpha: Score,
         beta: Score,
-        depth: u8,
+        depth: usize,
     ) -> BoardEvaluation {
         match board.status() {
             BoardStatus::Checkmate => {
                 // We lost :(
-                BoardEvaluation::score(Score::Mate(0))
+                BoardEvaluation::score(Score::Mate(0), depth)
             }
-            BoardStatus::Stalemate => BoardEvaluation::score(Score::cp(0)),
+            BoardStatus::Stalemate => BoardEvaluation::score(Score::cp(0), depth),
             BoardStatus::Ongoing => {
                 if depth == self.current_search_depth {
                     // Terminate at max depth
                     // Hueristic based on material
-                    BoardEvaluation::score(eval_heuristic(board))
+                    BoardEvaluation::score(eval_heuristic(board), depth)
                 } else if self
                     .stop_time
                     .map(|st| Instant::now() > st)
@@ -245,7 +245,7 @@ impl Engine {
                 {
                     // Early termination on time
                     // Hueristic based on material
-                    BoardEvaluation::score_early(eval_heuristic(board))
+                    BoardEvaluation::score_early(eval_heuristic(board), depth)
                 } else {
                     // Down the tree we go
                     let mut iter = MoveGen::new_legal(board);
@@ -332,18 +332,18 @@ impl BoardEvaluation {
     /// such as in mating positions and stalemates.
     ///
     /// These positions are terminal *inherently*, so they are never considered an early termination
-    fn score(score: Score) -> Self {
+    fn score(score: Score, depth: usize) -> Self {
         Self {
-            pv: Vec::new(),
+            pv: Vec::with_capacity(depth),
             score,
             terminated_early: false,
         }
     }
 
     /// Constructs a new [`BoardEvaluation`] for an early termination, using the score hueristic
-    fn score_early(score: Score) -> Self {
+    fn score_early(score: Score, depth: usize) -> Self {
         Self {
-            pv: Vec::new(),
+            pv: Vec::with_capacity(depth),
             score,
             terminated_early: true,
         }
