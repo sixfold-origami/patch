@@ -170,47 +170,49 @@ impl Engine {
         loop {
             let eval = self.evaluate_board(&self.board, true, Score::min(), Score::max(), 0);
 
-            if !eval.terminated_early {
-                let search_time_ms = self
-                    .start_time
-                    .map(|start_time| (Instant::now() - start_time).as_millis())
-                    .unwrap_or_default();
+            let search_time_ms = self
+                .start_time
+                .map(|start_time| (Instant::now() - start_time).as_millis())
+                .unwrap_or_default();
 
-                println!(
-                    "{}",
-                    UciResponse::info(
-                        UciInfo::new()
-                            .score(UciScore::from(eval.score))
-                            .pv(eval.pv.iter().rev().map(|mv| mv.to_string()))
-                            .depth(self.current_search_depth)
-                            .time(search_time_ms)
-                    )
-                );
+            println!(
+                "{}",
+                UciResponse::info(
+                    UciInfo::new()
+                        .score(UciScore::from(eval.score))
+                        .pv(eval.pv.iter().rev().map(|mv| mv.to_string()))
+                        .depth(self.current_search_depth)
+                        .time(search_time_ms)
+                )
+            );
 
-                // TODO: we can still do this on early termination if the tree search is ordered based on previous search depths
-                // TODO: handle stop command if stop_time is None
-                self.pv = eval.pv;
+            // TODO: we can still do this on early termination if the tree search is ordered based on previous search depths
+            // TODO: handle stop command if stop_time is None
+            self.pv = eval.pv;
 
-                if self
-                    .depth_limit
-                    .map(|l| l == self.current_search_depth)
-                    .unwrap_or_default()
-                {
-                    // Early termination on depth limit
-                    return self
-                        .pv
-                        .pop()
-                        .context("Failed to search even a single depth level");
-                } else {
-                    // Deeper we go
-                    self.current_search_depth += 1;
-                }
-            } else {
-                // We are done here
+            if self
+                .depth_limit
+                .map(|l| l == self.current_search_depth)
+                .unwrap_or_default()
+            {
+                // Early termination on depth limit
                 return self
                     .pv
                     .pop()
                     .context("Failed to search even a single depth level");
+            } else if self
+                .stop_time
+                .map(|st| Instant::now() > st)
+                .unwrap_or_default()
+            {
+                // Out of time, time to return what we found
+                return self
+                    .pv
+                    .pop()
+                    .context("Failed to search even a single depth level");
+            } else {
+                // Deeper we go
+                self.current_search_depth += 1;
             }
         }
     }
@@ -246,7 +248,7 @@ impl Engine {
                 {
                     // Early termination on time
                     // Hueristic based on material
-                    BoardEvaluation::score_early(eval_heuristic(board), depth)
+                    BoardEvaluation::score(eval_heuristic(board), depth)
                 } else {
                     // Down the tree we go
                     let mut iter = MoveGen::new_legal(board);
@@ -328,9 +330,6 @@ pub struct BoardEvaluation {
     pv: Vec<ChessMove>,
     /// The score of this subtree
     score: Score,
-    /// Whether this subtree was terminated early,
-    /// such as from a stop command or from running out of time
-    terminated_early: bool,
 }
 
 impl BoardEvaluation {
@@ -345,29 +344,15 @@ impl BoardEvaluation {
         Self {
             pv: child.pv,
             score: child.score.flip(),
-            // If they terminated early, then so did we, technically
-            terminated_early: child.terminated_early,
         }
     }
 
     /// Constructs a new [`BoardEvaluation`] when only the score is known,
     /// such as in mating positions and stalemates.
-    ///
-    /// These positions are terminal *inherently*, so they are never considered an early termination
     fn score(score: Score, depth: usize) -> Self {
         Self {
             pv: Vec::with_capacity(depth),
             score,
-            terminated_early: false,
-        }
-    }
-
-    /// Constructs a new [`BoardEvaluation`] for an early termination, using the score hueristic
-    fn score_early(score: Score, depth: usize) -> Self {
-        Self {
-            pv: Vec::with_capacity(depth),
-            score,
-            terminated_early: true,
         }
     }
 
@@ -378,7 +363,6 @@ impl BoardEvaluation {
         Self {
             pv: Vec::new(),
             score: Score::Mate(0),
-            terminated_early: false,
         }
     }
 }
