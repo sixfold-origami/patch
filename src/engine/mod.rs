@@ -181,7 +181,8 @@ impl Engine {
                         UciInfo::new()
                             .score(UciScore::from(eval.score))
                             .pv([eval_mv.to_string()])
-                            .depth(format!("{}/{}", self.current_search_depth, eval.depth))
+                            .depth(self.current_search_depth)
+                            .seldepth(eval.depth)
                             .time(search_time_ms)
                     )
                 );
@@ -268,8 +269,7 @@ impl Engine {
 
                             if eval > *best.read() {
                                 {
-                                    let mut best = best.write();
-                                    *best = eval;
+                                    best.write().overwrite(eval);
                                 }
                                 if eval.score > *alpha.read() {
                                     let mut alpha = alpha.write();
@@ -353,8 +353,7 @@ impl Engine {
                                 return Some(eval);
                             }
                             if eval > *best.read() {
-                                let mut best = best.write();
-                                *best = eval;
+                                best.write().overwrite(eval);
                             }
                             if eval.score > *alpha.read() {
                                 let mut alpha = alpha.write();
@@ -433,6 +432,14 @@ impl BoardEvaluation {
             score: Score::Mate(0),
             terminated_early: false,
         }
+    }
+
+    /// Overwrites the values of `self` with values of `other`, except for depth, which takes the max
+    fn overwrite(&mut self, other: Self) {
+        self.mv = other.mv;
+        self.score = other.score;
+        self.terminated_early = other.terminated_early;
+        self.depth = self.depth.max(other.depth);
     }
 }
 
