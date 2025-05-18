@@ -35,7 +35,7 @@ fn piece_table_eval(board: &Board) -> i16 {
 
     let (mg_score, eg_score) = (0..64)
         .into_iter()
-        .map(|i| {
+        .map(|i: usize| {
             let square = BitBoard::new(1u64 << i);
 
             if combined & square == EMPTY {
@@ -100,7 +100,7 @@ fn piece_table_eval(board: &Board) -> i16 {
 /// 1. What index to use in the piece square table
 /// 2. Whether it is one of ours (expressed as a score multiplier)
 #[inline(always)]
-fn color_helper(board: &Board, square: BitBoard, i: i32) -> (usize, i16) {
+fn color_helper(board: &Board, square: BitBoard, i: usize) -> (usize, i16) {
     if board.color_combined(Color::White) & square != EMPTY {
         let mult = if Color::White == board.side_to_move() {
             1
@@ -108,7 +108,7 @@ fn color_helper(board: &Board, square: BitBoard, i: i32) -> (usize, i16) {
             -1
         };
 
-        (i as usize, mult)
+        (i, mult)
     } else {
         let mult = if Color::Black == board.side_to_move() {
             1
@@ -116,7 +116,7 @@ fn color_helper(board: &Board, square: BitBoard, i: i32) -> (usize, i16) {
             -1
         };
 
-        ((i ^ 56) as usize, mult)
+        (i ^ 56, mult)
     }
 }
 
