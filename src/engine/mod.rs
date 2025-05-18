@@ -168,7 +168,7 @@ impl Engine {
 
         // Search
         loop {
-            let eval = self.evaluate_board(&self.board, Score::min(), Score::max(), 0);
+            let eval = self.evaluate_board(&self.board, true, Score::min(), Score::max(), 0);
 
             if !eval.terminated_early {
                 let search_time_ms = self
@@ -223,6 +223,7 @@ impl Engine {
     fn evaluate_board(
         &self,
         board: &Board,
+        pv: bool,
         alpha: Score,
         beta: Score,
         depth: usize,
@@ -253,12 +254,12 @@ impl Engine {
                     let best = RwLock::new(BoardEvaluation::min());
                     let alpha = RwLock::new(alpha);
 
-                    let eval_move = |mv| {
+                    let eval_move = |pv: &mut bool, mv| {
                         let next = board.make_move_new(mv);
 
                         let a = { *alpha.read() };
                         let eval = BoardEvaluation::from_child(
-                            self.evaluate_board(&next, beta.flip(), a.flip(), depth + 1),
+                            self.evaluate_board(&next, *pv, beta.flip(), a.flip(), depth + 1),
                             mv,
                         );
 
@@ -284,11 +285,21 @@ impl Engine {
                     };
 
                     // Eval the pv first
-                    if let Some(pv_move) = self.pv.get(self.pv.len() - depth) {
-                        iter.remove_move(*pv_move);
-                        if let Some(best) = eval_move(*pv_move) {
-                            return best;
-                        };
+                    if pv {
+                        // We're on the pv trail
+
+                        // Safety note: if the depth ever exceeds the usise max, then weird things will occur.
+                        // `wrapping_sub` will start to wrap back in range of the pv length, and we'll index incorrect values.
+                        // However, usize::MAX is so big that if we ever manage to search that deep,
+                        // then we'll have made the greatest chess engine the world has ever known.
+                        let pv_index = self.pv.len().wrapping_sub(depth + 1);
+
+                        if let Some(pv_move) = self.pv.get(pv_index) {
+                            iter.remove_move(*pv_move);
+                            if let Some(best) = eval_move(&mut true, *pv_move) {
+                                return best;
+                            };
+                        }
                     }
 
                     // This will always return some non-identity value,
@@ -298,7 +309,8 @@ impl Engine {
                     (&mut iter)
                         .par_bridge()
                         .into_par_iter()
-                        .find_map_any(eval_move)
+                        .map_with(false, eval_move)
+                        .find_map_any(|x| x)
                         .unwrap_or(best.read().clone())
                 }
             }
