@@ -128,10 +128,10 @@ impl Engine {
 
                 if let Some(time) = time {
                     // Basic thinking time hueristic
-                    let thinking_time = if let Some(inc) = inc {
-                        time / 20 + inc / 2
-                    } else if let Some(movestogo) = options.movestogo {
+                    let thinking_time = if let Some(movestogo) = options.movestogo {
                         time / movestogo
+                    } else if let Some(inc) = inc {
+                        time / 20 + inc / 2
                     } else {
                         unimplemented!("Got unimplemented time control options");
                     };
