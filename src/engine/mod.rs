@@ -27,10 +27,11 @@ pub struct Engine {
 
     board: Board,
 
+    start_time: Option<Instant>,
     stop_time: Option<Instant>,
     current_search_depth: u8,
-    best_move_found: Option<ChessMove>,
     depth_limit: Option<u8>,
+    best_move_found: Option<ChessMove>,
 }
 
 impl Engine {
@@ -58,6 +59,7 @@ impl Engine {
     ///
     /// E.g. the best move found, the current search depth, etc.
     fn reset_search_params(&mut self) {
+        self.start_time = None;
         self.stop_time = None;
         self.current_search_depth = 1;
         self.best_move_found = None;
@@ -103,15 +105,18 @@ impl Engine {
     /// - Otherwise, if moves to go is specified, then that + the remaining time is used to determine a reasonable thinking time
     /// - Otherwise, it will either panic (unimplemented), or set the `self.stop_time` to [`None`]
     #[inline]
-    pub fn calculate_stop_time(&mut self, options: UciSearchOptions) -> anyhow::Result<()> {
+    pub fn calculate_stop_time(&mut self, options: &UciSearchOptions) -> anyhow::Result<()> {
         if !options.infinite {
             // In infinite mode, we search until told to stop
             // Otherwise, we figure out our time control
 
+            self.start_time = Some(Instant::now());
+
             if let Some(movetime) = options.movetime {
                 // Search for the provided duration
                 self.stop_time = Some(
-                    Instant::now()
+                    self.start_time
+                        .unwrap() // Just set above
                         .checked_add(movetime - SLACK_TIME)
                         .context("Failed to add provided movetime to current instant")?,
                 );
@@ -123,16 +128,17 @@ impl Engine {
 
                 if let Some(time) = time {
                     // Basic thinking time hueristic
-                    let thinking_time = if let Some(inc) = inc {
-                        time / 20 + inc / 2
-                    } else if let Some(movestogo) = options.movestogo {
+                    let thinking_time = if let Some(movestogo) = options.movestogo {
                         time / movestogo
+                    } else if let Some(inc) = inc {
+                        time / 20 + inc / 2
                     } else {
                         unimplemented!("Got unimplemented time control options");
                     };
 
                     self.stop_time = Some(
-                        Instant::now()
+                        self.start_time
+                            .unwrap() // Just set above
                             .checked_add(thinking_time - SLACK_TIME)
                             .context("Failed to add thinking time to current instant")?,
                     );
@@ -150,7 +156,10 @@ impl Engine {
     /// If [`Engine::set_position`] is not called, then the default chess starting position is used
     pub fn search(&mut self, options: UciSearchOptions) -> anyhow::Result<ChessMove> {
         // Determine and set stop time
-        self.calculate_stop_time(options)?;
+        self.calculate_stop_time(&options)?;
+
+        // Set depth limit if provided
+        self.depth_limit = options.depth.as_ref().map(|d| *d as u8);
 
         // Search
         loop {
@@ -161,6 +170,11 @@ impl Engine {
                     .mv
                     .context("Asked to search on a position with no legal moves")?;
 
+                let search_time_ms = self
+                    .start_time
+                    .map(|start_time| (Instant::now() - start_time).as_millis())
+                    .unwrap_or_default();
+
                 println!(
                     "{}",
                     UciResponse::info(
@@ -168,6 +182,7 @@ impl Engine {
                             .score(UciScore::from(eval.score))
                             .pv([eval_mv.to_string()])
                             .depth(self.current_search_depth)
+                            .time(search_time_ms)
                     )
                 );
 
