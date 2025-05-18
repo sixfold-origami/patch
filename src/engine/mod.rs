@@ -1,6 +1,5 @@
 use std::{
     cmp::Ordering,
-    iter,
     str::FromStr,
     time::{Duration, Instant},
 };
@@ -28,11 +27,16 @@ pub struct Engine {
 
     board: Board,
 
+    /// Principal variation of the most recent search
+    ///
+    /// The sequence of best moves found in the most recently searched position,
+    /// stored in reverse order.
+    /// (i.e. the first move to play is at the back, and the last move in the sequence is at index 0.)
+    pv: Vec<ChessMove>,
     start_time: Option<Instant>,
     stop_time: Option<Instant>,
     current_search_depth: u8,
     depth_limit: Option<u8>,
-    best_move_found: Option<ChessMove>,
 }
 
 impl Engine {
@@ -63,7 +67,7 @@ impl Engine {
         self.start_time = None;
         self.stop_time = None;
         self.current_search_depth = 1;
-        self.best_move_found = None;
+        self.pv = Vec::new();
     }
 
     /// Sets the board to the given position
@@ -167,10 +171,6 @@ impl Engine {
             let eval = self.evaluate_board(&self.board, Score::min(), Score::max(), 0);
 
             if !eval.terminated_early {
-                let eval_mv = eval
-                    .mv
-                    .context("Asked to search on a position with no legal moves")?;
-
                 let search_time_ms = self
                     .start_time
                     .map(|start_time| (Instant::now() - start_time).as_millis())
@@ -181,8 +181,7 @@ impl Engine {
                     UciResponse::info(
                         UciInfo::new()
                             .score(UciScore::from(eval.score))
-                            .pv(iter::once(eval_mv.to_string())
-                                .chain(eval.pv.iter().map(|mv| mv.to_string())))
+                            .pv(eval.pv.iter().rev().map(|mv| mv.to_string()))
                             .depth(self.current_search_depth)
                             .time(search_time_ms)
                     )
@@ -190,7 +189,7 @@ impl Engine {
 
                 // TODO: we can still do this on early termination if the tree search is ordered based on previous search depths
                 // TODO: handle stop command if stop_time is None
-                self.best_move_found = Some(eval_mv);
+                self.pv = eval.pv;
 
                 if self
                     .depth_limit
@@ -199,7 +198,8 @@ impl Engine {
                 {
                     // Early termination on depth limit
                     return self
-                        .best_move_found
+                        .pv
+                        .pop()
                         .context("Failed to search even a single depth level");
                 } else {
                     // Deeper we go
@@ -208,7 +208,8 @@ impl Engine {
             } else {
                 // We are done here
                 return self
-                    .best_move_found
+                    .pv
+                    .pop()
                     .context("Failed to search even a single depth level");
             }
         }
@@ -298,11 +299,10 @@ impl Engine {
 /// Return value of [`Engine::evaluate_board`]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BoardEvaluation {
-    /// The best move found in this subtree
-    mv: Option<ChessMove>,
-    /// The principal variation found
+    /// The principal variation found, stored in reverse order
     ///
-    /// Does not include `mv`
+    /// "Reverse order" here means that the first moves played are at the back of the vec,
+    /// and the final moves are at the front.
     pv: Vec<ChessMove>,
     /// The score of this subtree
     score: Score,
@@ -318,15 +318,10 @@ impl BoardEvaluation {
     /// - Flip the score, as children evaluate from their perspective
     /// - Paste in the move that got us from our board to the child board
     fn from_child(mut child: Self, mv: ChessMove) -> Self {
-        let mut pv = Vec::with_capacity(child.pv.len() + 1);
-        if let Some(mv) = child.mv {
-            pv.push(mv);
-        }
-        pv.append(&mut child.pv);
+        child.pv.push(mv);
 
         Self {
-            mv: Some(mv),
-            pv,
+            pv: child.pv,
             score: child.score.flip(),
             // If they terminated early, then so did we, technically
             terminated_early: child.terminated_early,
@@ -339,7 +334,6 @@ impl BoardEvaluation {
     /// These positions are terminal *inherently*, so they are never considered an early termination
     fn score(score: Score) -> Self {
         Self {
-            mv: None,
             pv: Vec::new(),
             score,
             terminated_early: false,
@@ -349,7 +343,6 @@ impl BoardEvaluation {
     /// Constructs a new [`BoardEvaluation`] for an early termination, using the score hueristic
     fn score_early(score: Score) -> Self {
         Self {
-            mv: None,
             pv: Vec::new(),
             score,
             terminated_early: true,
@@ -361,7 +354,6 @@ impl BoardEvaluation {
     /// This is used as an identiy value when computing the best of a set of evaluations
     fn min() -> Self {
         Self {
-            mv: None,
             pv: Vec::new(),
             score: Score::Mate(0),
             terminated_early: false,
