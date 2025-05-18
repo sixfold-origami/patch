@@ -56,28 +56,28 @@ fn piece_table_eval(board: &Board) -> i16 {
                     ENDGAME_KNIGHT_VALUE[index] * ours,
                 )
             } else if bishops & square != EMPTY {
-                // Found a knight
+                // Found a bishop
                 let (index, ours) = color_helper(board, square, i);
                 (
                     MIDGAME_BISHOP_VALUE[index] * ours,
                     ENDGAME_BISHOP_VALUE[index] * ours,
                 )
             } else if rooks & square != EMPTY {
-                // Found a knight
+                // Found a rook
                 let (index, ours) = color_helper(board, square, i);
                 (
                     MIDGAME_ROOK_VALUE[index] * ours,
                     ENDGAME_ROOK_VALUE[index] * ours,
                 )
             } else if queens & square != EMPTY {
-                // Found a knight
+                // Found a queen
                 let (index, ours) = color_helper(board, square, i);
                 (
                     MIDGAME_QUEEN_VALUE[index] * ours,
                     ENDGAME_QUEEN_VALUE[index] * ours,
                 )
             } else if kings & square != EMPTY {
-                // Found a knight
+                // Found a king
                 let (index, ours) = color_helper(board, square, i);
                 (
                     MIDGAME_KING_VALUE[index] * ours,
