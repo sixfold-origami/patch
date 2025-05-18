@@ -234,7 +234,7 @@ impl Engine {
                 if depth == self.current_search_depth {
                     // Terminate at max depth
                     // Hueristic based on material
-                    BoardEvaluation::score(eval_heuristic(board))
+                    self.evaluate_board_quiescence(board, alpha, beta)
                 } else if self
                     .stop_time
                     .map(|st| Instant::now() > st)
@@ -280,6 +280,79 @@ impl Engine {
                             if eval.score >= beta {
                                 let best = { *best.read() };
                                 return Some(best);
+                            }
+
+                            None
+                        })
+                        .unwrap_or(*best.read())
+                }
+            }
+        }
+    }
+
+    /// Evaluates all quiet positions on the provided board, assuming we are up to move
+    ///
+    /// Only quiet positions (captures) are evaluated
+    fn evaluate_board_quiescence(
+        &self,
+        board: &Board,
+        alpha: Score,
+        beta: Score,
+    ) -> BoardEvaluation {
+        match board.status() {
+            BoardStatus::Checkmate => {
+                // We lost :(
+                BoardEvaluation::score(Score::Mate(0))
+            }
+            BoardStatus::Stalemate => BoardEvaluation::score(Score::cp(0)),
+            BoardStatus::Ongoing => {
+                if self
+                    .stop_time
+                    .map(|st| Instant::now() > st)
+                    .unwrap_or_default()
+                {
+                    // Early termination on time
+                    // Hueristic based on material
+                    BoardEvaluation::score_early(eval_heuristic(board))
+                } else {
+                    // Down the tree we go
+                    let mut iter = MoveGen::new_legal(board);
+                    iter.remove_mask(!board.color_combined(!board.side_to_move()));
+
+                    let stand_pat = eval_heuristic(board);
+                    if stand_pat >= beta {
+                        return BoardEvaluation::score(stand_pat);
+                    }
+
+                    let alpha = if alpha < stand_pat {
+                        RwLock::new(stand_pat)
+                    } else {
+                        RwLock::new(alpha)
+                    };
+                    let best = RwLock::new(BoardEvaluation::score(stand_pat));
+
+                    (&mut iter)
+                        .par_bridge()
+                        .into_par_iter()
+                        .find_map_any(|mv| {
+                            let next = board.make_move_new(mv);
+
+                            let a = { *alpha.read() };
+                            let eval = BoardEvaluation::from_child(
+                                self.evaluate_board_quiescence(&next, beta.flip(), a.flip()),
+                                mv,
+                            );
+
+                            if eval.score >= beta {
+                                return Some(eval);
+                            }
+                            if eval > *best.read() {
+                                let mut best = best.write();
+                                *best = eval;
+                            }
+                            if eval.score > *alpha.read() {
+                                let mut alpha = alpha.write();
+                                *alpha = eval.score;
                             }
 
                             None
