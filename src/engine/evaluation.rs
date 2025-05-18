@@ -1,4 +1,4 @@
-use chess::{Board, Color, Piece, Square};
+use chess::{BitBoard, Board, Color, EMPTY, Piece};
 use tables::{
     ENDGAME_BISHOP_VALUE, ENDGAME_KING_VALUE, ENDGAME_KNIGHT_VALUE, ENDGAME_PAWN_VALUE,
     ENDGAME_QUEEN_VALUE, ENDGAME_ROOK_VALUE, MIDGAME_BISHOP_VALUE, MIDGAME_KING_VALUE,
@@ -14,89 +14,77 @@ pub fn eval_heuristic(board: &Board) -> Score {
     Score::cp(score)
 }
 
-/// Scores the provided board based on pure material value, assuming that we are up to move
-#[allow(unused)]
-fn material_eval(board: &Board) -> i16 {
-    let mine = board.color_combined(board.side_to_move());
-    let theirs = board.color_combined(!board.side_to_move());
-
-    // Get pieces and do sums
-    let mut cp: i16 = 0;
-
-    cp += ((board.pieces(Piece::Pawn) & *mine).popcnt() * 100) as i16;
-    cp -= ((board.pieces(Piece::Pawn) & *theirs).popcnt() * 100) as i16;
-
-    cp += ((board.pieces(Piece::Knight) & *mine).popcnt() * 350) as i16;
-    cp -= ((board.pieces(Piece::Knight) & *theirs).popcnt() * 350) as i16;
-
-    cp += ((board.pieces(Piece::Bishop) & *mine).popcnt() * 350) as i16;
-    cp -= ((board.pieces(Piece::Bishop) & *theirs).popcnt() * 350) as i16;
-
-    cp += ((board.pieces(Piece::Rook) & *mine).popcnt() * 525) as i16;
-    cp -= ((board.pieces(Piece::Rook) & *theirs).popcnt() * 525) as i16;
-
-    cp += ((board.pieces(Piece::Queen) & *mine).popcnt() * 1000) as i16;
-    cp -= ((board.pieces(Piece::Queen) & *theirs).popcnt() * 1000) as i16;
-
-    cp
-}
-
 /// Scores the provided board using piece [`tables`]
 ///
 /// Always scored from the perspective of the player that is up to move
 /// Pieces are given values based both on their material value and their position on the board
 fn piece_table_eval(board: &Board) -> i16 {
-    let phase = (board.pieces(Piece::Knight).popcnt()
-        + board.pieces(Piece::Bishop).popcnt()
-        + 2 * board.pieces(Piece::Rook).popcnt()
-        + 4 * board.pieces(Piece::Queen).popcnt())
-    .min(24) as i32; // Account for early promotion
+    let combined = board.combined();
+
+    let pawns = board.pieces(Piece::Pawn);
+    let knights = board.pieces(Piece::Knight);
+    let bishops = board.pieces(Piece::Bishop);
+    let rooks = board.pieces(Piece::Rook);
+    let queens = board.pieces(Piece::Queen);
+    let kings = board.pieces(Piece::King);
+
+    let phase = (knights.popcnt() + bishops.popcnt() + 2 * rooks.popcnt() + 4 * queens.popcnt())
+        .min(24) as i32; // Account for early promotion
 
     let inverse_phase = 24 - phase;
 
     let (mg_score, eg_score) = (0..64)
         .into_iter()
-        .map(|i| {
-            let square = Square::new(i);
+        .map(|i: usize| {
+            let square = BitBoard::new(1u64 << i);
 
-            let piece = board.piece_on(square);
-            let color = board.color_on(square);
-            match (piece, color) {
-                (None, None) => (0, 0), // No piece here, just return the identity
-                (Some(piece), Some(color)) => {
-                    let index = match color {
-                        Color::White => i,
-                        // Piece tables are always relative to the current player,
-                        // But the square indices are absolute (starting at A1).
-                        // So, black must flip the index to get the right orientation.
-                        Color::Black => i ^ 56,
-                    } as usize;
-
-                    let mg_score = match piece {
-                        Piece::Pawn => MIDGAME_PAWN_VALUE[index],
-                        Piece::Knight => MIDGAME_KNIGHT_VALUE[index],
-                        Piece::Bishop => MIDGAME_BISHOP_VALUE[index],
-                        Piece::Rook => MIDGAME_ROOK_VALUE[index],
-                        Piece::Queen => MIDGAME_QUEEN_VALUE[index],
-                        Piece::King => MIDGAME_KING_VALUE[index],
-                    };
-
-                    let eg_score = match piece {
-                        Piece::Pawn => ENDGAME_PAWN_VALUE[index],
-                        Piece::Knight => ENDGAME_KNIGHT_VALUE[index],
-                        Piece::Bishop => ENDGAME_BISHOP_VALUE[index],
-                        Piece::Rook => ENDGAME_ROOK_VALUE[index],
-                        Piece::Queen => ENDGAME_QUEEN_VALUE[index],
-                        Piece::King => ENDGAME_KING_VALUE[index],
-                    };
-
-                    if color == board.side_to_move() {
-                        (mg_score, eg_score)
-                    } else {
-                        (-mg_score, -eg_score)
-                    }
-                }
-                _ => unreachable!(),
+            if combined & square == EMPTY {
+                // No piece here, just return the identity
+                (0, 0)
+            } else if pawns & square != EMPTY {
+                // Found a pawn
+                let (index, ours) = color_helper(board, square, i);
+                (
+                    MIDGAME_PAWN_VALUE[index] * ours,
+                    ENDGAME_PAWN_VALUE[index] * ours,
+                )
+            } else if knights & square != EMPTY {
+                // Found a knight
+                let (index, ours) = color_helper(board, square, i);
+                (
+                    MIDGAME_KNIGHT_VALUE[index] * ours,
+                    ENDGAME_KNIGHT_VALUE[index] * ours,
+                )
+            } else if bishops & square != EMPTY {
+                // Found a knight
+                let (index, ours) = color_helper(board, square, i);
+                (
+                    MIDGAME_BISHOP_VALUE[index] * ours,
+                    ENDGAME_BISHOP_VALUE[index] * ours,
+                )
+            } else if rooks & square != EMPTY {
+                // Found a knight
+                let (index, ours) = color_helper(board, square, i);
+                (
+                    MIDGAME_ROOK_VALUE[index] * ours,
+                    ENDGAME_ROOK_VALUE[index] * ours,
+                )
+            } else if queens & square != EMPTY {
+                // Found a knight
+                let (index, ours) = color_helper(board, square, i);
+                (
+                    MIDGAME_QUEEN_VALUE[index] * ours,
+                    ENDGAME_QUEEN_VALUE[index] * ours,
+                )
+            } else if kings & square != EMPTY {
+                // Found a knight
+                let (index, ours) = color_helper(board, square, i);
+                (
+                    MIDGAME_KING_VALUE[index] * ours,
+                    ENDGAME_KING_VALUE[index] * ours,
+                )
+            } else {
+                unreachable!()
             }
         })
         .reduce(|(mg_acc, eg_acc), (mg_score, eg_score)| (mg_acc + mg_score, eg_acc + eg_score))
@@ -104,6 +92,32 @@ fn piece_table_eval(board: &Board) -> i16 {
 
     // TODO: Benchmark these casts to try to make them faster. Maybe move everything to i32?
     (((mg_score as i32) * phase + (eg_score as i32) * inverse_phase) / 24) as i16
+}
+
+/// Assumes a piece is present on `square` of `board`.
+///
+/// Then, gets the color of that piece, and uses that information to determine:
+/// 1. What index to use in the piece square table
+/// 2. Whether it is one of ours (expressed as a score multiplier)
+#[inline(always)]
+fn color_helper(board: &Board, square: BitBoard, i: usize) -> (usize, i16) {
+    if board.color_combined(Color::White) & square != EMPTY {
+        let mult = if Color::White == board.side_to_move() {
+            1
+        } else {
+            -1
+        };
+
+        (i, mult)
+    } else {
+        let mult = if Color::Black == board.side_to_move() {
+            1
+        } else {
+            -1
+        };
+
+        (i ^ 56, mult)
+    }
 }
 
 /// Contains all the values for the piece tables and material values
