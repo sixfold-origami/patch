@@ -43,13 +43,14 @@ fn material_eval(board: &Board) -> i16 {
 
 /// Scores the provided board using piece [`tables`]
 ///
+/// Always scored from the perspective of the player that is up to move
 /// Pieces are given values based both on their material value and their position on the board
 fn piece_table_eval(board: &Board) -> i16 {
     let phase = (board.pieces(Piece::Knight).popcnt()
         + board.pieces(Piece::Bishop).popcnt()
         + 2 * board.pieces(Piece::Rook).popcnt()
         + 4 * board.pieces(Piece::Queen).popcnt())
-    .min(24) as i16; // Account for early promotion
+    .min(24) as i32; // Account for early promotion
 
     let inverse_phase = 24 - phase;
 
@@ -101,7 +102,8 @@ fn piece_table_eval(board: &Board) -> i16 {
         .reduce(|(mg_acc, eg_acc), (mg_score, eg_score)| (mg_acc + mg_score, eg_acc + eg_score))
         .unwrap();
 
-    (mg_score * phase + eg_score * inverse_phase) / 24
+    // TODO: Benchmark these casts to try to make them faster. Maybe move everything to i32?
+    (((mg_score as i32) * phase + (eg_score as i32) * inverse_phase) / 24) as i16
 }
 
 /// Contains all the values for the piece tables and material values
