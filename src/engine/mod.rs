@@ -253,6 +253,44 @@ impl Engine {
                     let best = RwLock::new(BoardEvaluation::min());
                     let alpha = RwLock::new(alpha);
 
+                    let eval_move = |mv| {
+                        let next = board.make_move_new(mv);
+
+                        let a = { *alpha.read() };
+                        let eval = BoardEvaluation::from_child(
+                            self.evaluate_board(&next, beta.flip(), a.flip(), depth + 1),
+                            mv,
+                        );
+
+                        let eval_score = eval.score;
+
+                        if eval > *best.read() {
+                            {
+                                let mut best = best.write();
+                                *best = eval;
+                            }
+                            if eval_score > *alpha.read() {
+                                let mut alpha = alpha.write();
+                                *alpha = eval_score;
+                            }
+                        }
+
+                        if eval_score >= beta {
+                            let best = { best.read().clone() };
+                            return Some(best);
+                        }
+
+                        None
+                    };
+
+                    // Eval the pv first
+                    if let Some(pv_move) = self.pv.get(self.pv.len() - depth) {
+                        iter.remove_move(*pv_move);
+                        if let Some(best) = eval_move(*pv_move) {
+                            return best;
+                        };
+                    }
+
                     // This will always return some non-identity value,
                     // as long as the above iterator has at least one valid move.
                     // This is always the case, because the cases where no moves are available (mates)
@@ -260,35 +298,7 @@ impl Engine {
                     (&mut iter)
                         .par_bridge()
                         .into_par_iter()
-                        .find_map_any(|mv| {
-                            let next = board.make_move_new(mv);
-
-                            let a = { *alpha.read() };
-                            let eval = BoardEvaluation::from_child(
-                                self.evaluate_board(&next, beta.flip(), a.flip(), depth + 1),
-                                mv,
-                            );
-
-                            let eval_score = eval.score;
-
-                            if eval > *best.read() {
-                                {
-                                    let mut best = best.write();
-                                    *best = eval;
-                                }
-                                if eval_score > *alpha.read() {
-                                    let mut alpha = alpha.write();
-                                    *alpha = eval_score;
-                                }
-                            }
-
-                            if eval_score >= beta {
-                                let best = { best.read().clone() };
-                                return Some(best);
-                            }
-
-                            None
-                        })
+                        .find_map_any(eval_move)
                         .unwrap_or(best.read().clone())
                 }
             }
