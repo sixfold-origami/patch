@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 use chess::Board;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
@@ -26,6 +26,9 @@ fn criterion_benchmark(c: &mut Criterion) {
         .collect();
 
     let mut group = c.benchmark_group("evaluation heuristic");
+    group
+        .sample_size(1000)
+        .measurement_time(Duration::from_secs(30));
 
     for board in boards.iter() {
         group.bench_with_input(BenchmarkId::from_parameter(board), board, |b, board| {
