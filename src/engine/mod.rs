@@ -175,6 +175,15 @@ impl Engine {
                     self.board, eval,
                 ))?;
 
+                let mut pv = Vec::with_capacity(eval.depth as usize);
+                let mut board = self.board;
+                let tt = self.transposition_table.read();
+                while let Some(stored) = tt.get(&board) {
+                    pv.push(stored.mv.to_string());
+                    board = board.make_move_new(stored.mv);
+                }
+                drop(tt);
+
                 let search_time_ms = self
                     .start_time
                     .map(|start_time| (Instant::now() - start_time).as_millis())
@@ -185,7 +194,7 @@ impl Engine {
                     UciResponse::info(
                         UciInfo::new()
                             .score(UciScore::from(eval.score))
-                            .pv([eval_mv.to_string()])
+                            .pv(pv)
                             .depth(self.current_search_depth)
                             .seldepth(eval.depth)
                             .time(search_time_ms)
