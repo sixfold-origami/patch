@@ -137,7 +137,7 @@ impl From<Score> for UciScore {
     fn from(value: Score) -> Self {
         match value {
             Score::Centipawns(cp) => UciScore::cp(cp as i32),
-            Score::Mate(m) => UciScore::mate(m as i32),
+            Score::Mate(m) => UciScore::mate((m / 2 + m % 2) as i32),
         }
     }
 }
