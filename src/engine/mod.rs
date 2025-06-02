@@ -9,11 +9,13 @@ use chess::{Board, BoardStatus, ChessMove, Color, MoveGen};
 use evaluation::eval_heuristic;
 use parking_lot::RwLock;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
+use transposition::{NodeType, TranspositionData, TranspositionTable};
 use uci_parser::{UciInfo, UciResponse, UciScore, UciSearchOptions};
 
 use crate::score::Score;
 
 pub mod evaluation;
+pub mod transposition;
 
 /// A [`Duration`] subtracted from each move's thinking time, to make sure we don't accidentally go over
 ///
@@ -32,6 +34,8 @@ pub struct Engine {
     current_search_depth: u8,
     depth_limit: Option<u8>,
     best_move_found: Option<ChessMove>,
+
+    transposition_table: RwLock<TranspositionTable>,
 }
 
 impl Engine {
@@ -246,10 +250,52 @@ impl Engine {
                     BoardEvaluation::score_early(eval_heuristic(board), depth)
                 } else {
                     // Down the tree we go
-                    let mut iter = MoveGen::new_legal(board);
 
+                    // Check transposition table for alpha/beta, or an early return
+                    let tt_read = self.transposition_table.read(); // TODO: Maybe just clone?
+                    let transposition_data = tt_read.get(board);
+
+                    let alpha_cp = alpha; // Make a copy later to check PV/all node status
+                    let (alpha, beta) = match transposition_data {
+                        None => {
+                            // No data in transposition table for this position, so use regular defaults
+                            (RwLock::new(alpha), beta)
+                        }
+                        Some(td) => {
+                            // We've seen this position before
+                            if td.depth >= self.current_search_depth - depth {
+                                // This data comes from a depth which is equal or better to the depth we're about to search this subtree at
+                                match td.ty {
+                                    NodeType::Pv => {
+                                        // PV scores are exact, so we can just return now
+                                        return BoardEvaluation::new(
+                                            Some(td.mv),
+                                            depth + td.depth,
+                                            td.score,
+                                            false,
+                                        );
+                                    }
+                                    NodeType::Cut => {
+                                        // Cut nodes provide a lower bound on score
+                                        (RwLock::new(alpha.max(td.score)), beta)
+                                    }
+                                    NodeType::All => {
+                                        // All nodes provide an upper bound on score
+                                        (RwLock::new(alpha), beta.min(td.score))
+                                    }
+                                }
+                            } else {
+                                // We can get a more accurate answer if we recompute
+                                // TODO: I think we can be smarter about this with move ordering stuff, maybe
+                                (RwLock::new(alpha), beta)
+                            }
+                        }
+                    };
+                    drop(tt_read);
+
+                    // Set up moves to search
                     let best = RwLock::new(BoardEvaluation::min());
-                    let alpha = RwLock::new(alpha);
+                    let mut iter = MoveGen::new_legal(board);
 
                     // This will always return some non-identity value,
                     // as long as the above iterator has at least one valid move.
@@ -279,12 +325,55 @@ impl Engine {
 
                             if eval.score >= beta {
                                 let best = { *best.read() };
+
+                                let mv = best.mv.expect(
+                                    "Failed to get move for Transposition storage on Cut node",
+                                );
+                                self.transposition_table.write().insert(
+                                    *board,
+                                    TranspositionData::new(
+                                        best.score,
+                                        NodeType::Cut,
+                                        mv,
+                                        self.current_search_depth - depth,
+                                    ),
+                                );
+
                                 return Some(best);
                             }
 
                             None
                         })
-                        .unwrap_or(*best.read())
+                        .unwrap_or_else(|| {
+                            let best = { *best.read() };
+
+                            let ty = if *alpha.read() == alpha_cp {
+                                // Alpha is unchanged, so this was an all-node
+                                NodeType::All
+                            } else {
+                                // Alpha was changed, but the beta cutoff was not reached
+                                // This was in the bounds, so this is a PV node
+                                NodeType::Pv
+                            };
+
+                            let mv = best.mv.expect(
+                                "Failed to get move for Transposition storage on PV/All node",
+                            );
+
+                            // Update transposition table
+                            self.transposition_table.write().insert(
+                                *board,
+                                TranspositionData::new(
+                                    best.score,
+                                    ty,
+                                    mv,
+                                    self.current_search_depth - depth,
+                                ),
+                            );
+
+                            // We are out of here
+                            best
+                        })
                 }
             }
         }
@@ -384,6 +473,16 @@ pub struct BoardEvaluation {
 }
 
 impl BoardEvaluation {
+    /// Constructs a new [`BoardEvaluation`]
+    fn new(mv: Option<ChessMove>, depth: u8, score: Score, terminated_early: bool) -> Self {
+        Self {
+            mv,
+            depth,
+            score,
+            terminated_early,
+        }
+    }
+
     /// Constructs a [`BoardEvaluation`] from an evaluation coming out of a subtree
     ///
     /// This means that we must:
