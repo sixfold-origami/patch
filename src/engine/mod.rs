@@ -343,8 +343,8 @@ impl Engine {
                             let eval = BoardEvaluation::from_child(
                                 self.evaluate_board_quiescence(
                                     &next,
-                                    beta.flip(),
-                                    a.flip(),
+                                    beta.negate(),
+                                    a.negate(),
                                     depth + 1,
                                 ),
                                 mv,
