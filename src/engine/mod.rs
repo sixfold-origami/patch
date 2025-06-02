@@ -170,9 +170,10 @@ impl Engine {
             let eval = self.evaluate_board(&self.board, Score::min(), Score::max(), 0);
 
             if !eval.terminated_early {
-                let eval_mv = eval
-                    .mv
-                    .context("Asked to search on a position with no legal moves")?;
+                let eval_mv = eval.mv.context(format!(
+                    "Asked to search on a position with no legal moves: {} {:?}",
+                    self.board, eval,
+                ))?;
 
                 let search_time_ms = self
                     .start_time
