@@ -48,10 +48,30 @@ impl Score {
         }
     }
 
+    /// Semantically inverts `self`, to evaluate this score from the opponents perspective
+    ///
+    /// Unlike [`Self::flip`], mate scores are not incremented
+    /// In the case of M0, it is left unchanged.
+    /// There is a debug assert to ensure that this case is never hit.
+    #[inline]
+    pub fn negate(self) -> Self {
+        debug_assert_ne!(self, Score::mate(0));
+        match self {
+            Score::Centipawns(cp) => Score::Centipawns(-cp),
+            Score::Mate(m) => Score::Mate(-m),
+        }
+    }
+
     /// The minimum possible score, M0
     #[inline]
     pub fn min() -> Self {
         Self::Mate(0)
+    }
+
+    /// The minimum possible score that can still be efficiently negated, -M1
+    #[inline]
+    pub fn min_negatable() -> Self {
+        Self::Mate(-1)
     }
 
     /// The maximum possible score, M1
