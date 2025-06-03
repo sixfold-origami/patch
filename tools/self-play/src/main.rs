@@ -95,6 +95,7 @@ fn main() -> anyhow::Result<()> {
             "stderr=./master_stderr.txt",
             "-concurrency",
             &args.concurrency.to_string(),
+            "-recover",
             "-each",
             "proto=uci",
             &format!("tc={}", args.tc),

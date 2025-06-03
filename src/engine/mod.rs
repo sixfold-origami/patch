@@ -167,7 +167,7 @@ impl Engine {
 
         // Search
         loop {
-            let eval = self.evaluate_board(&self.board, Score::min(), Score::max(), 0);
+            let eval = self.evaluate_board(&self.board, Score::min_negatable(), Score::max(), 0);
 
             if !eval.terminated_early {
                 let eval_mv = eval.mv.context(format!(
@@ -319,7 +319,7 @@ impl Engine {
 
                             let a = { *alpha.read() };
                             let eval = BoardEvaluation::from_child(
-                                self.evaluate_board(&next, beta.flip(), a.flip(), depth + 1),
+                                self.evaluate_board(&next, beta.negate(), a.negate(), depth + 1),
                                 mv,
                             );
 
@@ -441,8 +441,8 @@ impl Engine {
                             let eval = BoardEvaluation::from_child(
                                 self.evaluate_board_quiescence(
                                     &next,
-                                    beta.flip(),
-                                    a.flip(),
+                                    beta.negate(),
+                                    a.negate(),
                                     depth + 1,
                                 ),
                                 mv,
