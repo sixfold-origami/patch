@@ -1,0 +1,120 @@
+{
+	// Use IntelliSense to learn about possible attributes.
+	// Hover to view descriptions of existing attributes.
+	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug unit tests in library 'patch'",
+			"cargo": {
+				"args": [
+					"test",
+					"--no-run",
+					"--lib",
+					"--package=patch"
+				],
+				"filter": {
+					"name": "patch",
+					"kind": "lib"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug executable 'patch'",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=patch",
+					"--package=patch"
+				],
+				"filter": {
+					"name": "patch",
+					"kind": "bin"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug unit tests in executable 'patch'",
+			"cargo": {
+				"args": [
+					"test",
+					"--no-run",
+					"--bin=patch",
+					"--package=patch"
+				],
+				"filter": {
+					"name": "patch",
+					"kind": "bin"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug benchmark 'evaluation'",
+			"cargo": {
+				"args": [
+					"test",
+					"--no-run",
+					"--bench=evaluation",
+					"--package=patch"
+				],
+				"filter": {
+					"name": "evaluation",
+					"kind": "bench"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug executable 'self-play'",
+			"cargo": {
+				"args": [
+					"build",
+					"--bin=self-play",
+					"--package=self-play"
+				],
+				"filter": {
+					"name": "self-play",
+					"kind": "bin"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}"
+		},
+		{
+			"type": "lldb",
+			"request": "launch",
+			"name": "Debug unit tests in executable 'self-play'",
+			"cargo": {
+				"args": [
+					"test",
+					"--no-run",
+					"--bin=self-play",
+					"--package=self-play"
+				],
+				"filter": {
+					"name": "self-play",
+					"kind": "bin"
+				}
+			},
+			"args": [],
+			"cwd": "${workspaceFolder}"
+		}
+	]
+}
