@@ -180,6 +180,10 @@ impl Engine {
                 let tt = self.transposition_table.read();
                 while let Some(stored) = tt.get(&board) {
                     pv.push(stored.mv.to_string());
+                    if pv.len() == eval.depth as usize {
+                        // Force break in the case where the PV repeats a position
+                        break;
+                    }
                     board = board.make_move_new(stored.mv);
                 }
                 drop(tt);
